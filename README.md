@@ -34,7 +34,7 @@ Endpoints protegidos:
 - `POST /posts/:postId/bookmark`
 - `DELETE /posts/:postId/bookmark`
 - `GET /users/my-profile`
-- `PATCH /users/my-profile` (JSON o `multipart/form-data` con `photo`; se sube a S3 bajo **`S3_USERS_FOLDER`**; por defecto el prefijo es **`profile-media/`**; en `photoKey` se guarda la **URL pública**). Por defecto: `https://<bucket>.s3.<region>.amazonaws.com/profile-media/...` (bucket desde **`S3_BUCKET`**, región con **`AWS_REGION`**). Opcional: **`S3_USER_PHOTO_BASE_URL`**. Ajusta en el bucket la política de acceso a ese prefijo. El backend usa `s3:PutObject` y `s3:DeleteObject` al reemplazar)
+- `PATCH /users/my-profile` (JSON o `multipart/form-data` con `photo`; sube a S3 bajo **`S3_USERS_FOLDER`**; prefijo por defecto **`profile-media/`**; en `photoKey` va la **URL pública** `https://<bucket>.s3.<region>.amazonaws.com/profile-media/...` con **`S3_BUCKET`** y **`AWS_REGION`**. Las subidas usan por defecto ACL **`public-read`** para que la URL abra en el navegador; si tu bucket bloquea ACLs, define **`S3_PROFILE_UPLOAD_ACL=off`** y una **política de bucket** que permita `s3:GetObject` en `arn:aws:s3:::TU_BUCKET/profile-media/*`. Ver sección [Foto de perfil y S3](#foto-de-perfil-y-s3). `s3:PutObject` / `s3:DeleteObject` en el rol de la app)
 - `GET /users/me` (alias)
 - `POST /auth/logout`
 - `POST /reports`
@@ -276,6 +276,47 @@ curl -X POST http://localhost:4000/reports \
 - Devuelve el perfil del usuario autenticado.
 - Incluye conteos de followers/following/posts.
 - Incluye bookmarks (ultimos 25) con sus posts.
+
+### Foto de perfil y S3
+
+Si la URL de `photoKey` devuelve **403 Access Denied** al abrirla en el navegador, el objeto sigue **privado** o el bucket bloquea lectura pública.
+
+1. **Por defecto** el backend sube la imagen con ACL `public-read` (lectura anónima). Si el `PutObject` falla con un error de ACL, el bucket puede tener *Object Ownership: Bucket owner enforced* o *Block public access*: pon **`S3_PROFILE_UPLOAD_ACL=off`** en el entorno y usa solo política de bucket (recomendado en cuentas nuevas).
+2. **Política de bucket** (sustituye `TU_BUCKET` por el **nombre real** de tu bucket, el mismo que en `S3_BUCKET`):
+
+**Cómo aplicarla (consola AWS)**
+
+1. Entra en [S3 en la consola](https://s3.console.aws.amazon.com/s3/buckets) y abre el bucket.
+2. Pestaña **Permissions** (Permisos).
+3. Baja a **Block public access (bucket settings)**. Si *Block all public access* está activo a nivel de bucket, pulsa **Edit** y desmarca al menos la opción que impide **policies** publicas, o el paso 5 fallará. AWS avisará; solo hazlo si aceptas lectura pública bajo el prefijo `profile-media/`.
+4. Sigue en la misma pantalla, sección **Bucket policy** → **Edit**.
+5. Pega el JSON de abajo (con tu nombre de bucket) y **Save changes**. Si el editor marca error de sintaxis, revisa comillas y el ARN.
+6. Prueba en el navegador la URL de una foto que ya esté bajo `profile-media/...`; debería devolver 200, no 403.
+
+```json
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "PublicReadProfileMedia",
+      "Effect": "Allow",
+      "Principal": "*",
+      "Action": "s3:GetObject",
+      "Resource": "arn:aws:s3:::TU_BUCKET/profile-media/*"
+    }
+  ]
+}
+```
+
+**Con AWS CLI** (mismo JSON en un fichero `policy.json` y tu bucket en la región adecuada):
+
+```bash
+aws s3api put-bucket-policy --bucket TU_BUCKET --policy file://policy.json
+```
+
+Si no cambiaste *Block public access* en el bucket, el comando puede fallar o la política no surtirá efecto; en ese caso ajusta primero el bloqueo en la consola (paso 3).
+
+3. **Objetos ya subidos** sin ACL pública: sigues viendo 403 hasta que o bien los vuelvas a subir con la nueva configuración o apliques `GetObject` vía política (la política cubre objetos existentes bajo esa ruta).
 
 ---
 

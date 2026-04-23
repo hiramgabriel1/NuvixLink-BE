@@ -84,6 +84,18 @@ export class S3Service {
   }
 
   /**
+   * Fotos de perfil: por defecto suben con ACL `public-read` para que la URL pública sea legible sin firmar.
+   * `S3_PROFILE_UPLOAD_ACL=off` no envía ACL (si el bucket tiene ACLs desactivadas o usas solo política por prefijo).
+   */
+  static profilePhotoUploadAcl(): 'public-read' | undefined {
+    const v = process.env.S3_PROFILE_UPLOAD_ACL?.trim().toLowerCase();
+    if (v === 'off' || v === '0' || v === 'false' || v === 'none') {
+      return undefined;
+    }
+    return 'public-read';
+  }
+
+  /**
    * URL pública a guardar en `User.photoKey` al subir a `s3ObjectKey`.
    * Sin `S3_USER_PHOTO_BASE_URL`: `https://<bucket>.s3.<region>.amazonaws.com/<key>` (virtual-hosted).
    * Necesitas lectura pública (p. ej. `GetObject` en el prefijo) u `ObjectOwnership` adecuado; no hace falta CloudFront.
@@ -145,9 +157,16 @@ export class S3Service {
   }
 
   /**
-   * Subida directa (buffer) al bucket; útil p.ej. reportes o jobs server-side.
+   * ACL opcional. Para fotos de perfil (URL pública) suele hacer falta `public-read` o una política de bucket; si el bucket
+   * tiene *Block public access* o *Object ownership: bucket owner*, la ACL puede fallar: usa política o desactiva ACLs y política.
    */
-  async putObject(params: { key: string; body: Buffer; contentType: string }): Promise<{ key: string }> {
+  async putObject(params: {
+    key: string;
+    body: Buffer;
+    contentType: string;
+    /** `public-read` para que la URL pública S3 (sin firmar) funcione. Desactiva con `S3_PROFILE_UPLOAD_ACL=off`. */
+    acl?: 'public-read';
+  }): Promise<{ key: string }> {
     const bucket = this.bucket;
     try {
       await this.client.send(
@@ -156,6 +175,7 @@ export class S3Service {
           Key: params.key,
           Body: params.body,
           ContentType: params.contentType,
+          ...(params.acl ? { ACL: params.acl } : {}),
         }),
       );
     } catch (e: unknown) {

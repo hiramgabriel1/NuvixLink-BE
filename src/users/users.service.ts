@@ -176,6 +176,7 @@ export class UsersService {
         key: s3ObjectKey,
         body: file.buffer,
         contentType: file.mimetype,
+        acl: S3Service.profilePhotoUploadAcl(),
       });
       publicPhotoToStore = S3Service.publicUrlForObjectKey(s3ObjectKey);
     }
