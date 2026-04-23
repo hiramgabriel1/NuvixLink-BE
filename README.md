@@ -18,6 +18,50 @@ Base backend en **NestJS**.
 - Swagger UI: `GET /docs`
 - Base URL local: `http://localhost:4000` (o el puerto definido en `PORT`)
 
+## Autenticación
+
+Los endpoints protegidos aceptan **dos esquemas de Bearer token**:
+
+1. **JWT propio** (emitido por `POST /auth/login` o `POST /auth/verify-email`).
+2. **JWT de Clerk** (emitido por el frontend de Next.js tras `Authorization: Bearer <clerk_jwt>`).
+
+El guard intenta primero validar el token con Clerk (JWKS remoto) si `CLERK_ISSUER` está configurado, y cae al JWT local si ese token no coincide con el formato/issuer de Clerk. Si ninguno valida → `401 Unauthorized`.
+
+### Clerk (JWKS)
+
+Variables de entorno:
+
+```
+CLERK_ISSUER=https://<tu-clerk-frontend-api>.clerk.accounts
+CLERK_AUDIENCE=   # opcional según tu configuración de Clerk
+```
+
+- La validación se hace con JWKS remoto (`<issuer>/.well-known/jwks.json`) usando `jose`, con caching automático.
+- Se valida `issuer` y, si se configura, `audience`.
+- Claims usados para mapear el usuario:
+  - `sub` → `clerkUserId` (obligatorio).
+  - `email` (o `email_address` / `primary_email_address`) → email.
+  - `username` (o `user_name` / `given_name`) → username.
+- Mapeo a BD (`findOrCreateByClerk`, idempotente):
+  1. Si existe un `User` con ese `clerkUserId`, se usa.
+  2. Si no, y el email coincide con un usuario existente, se enlaza `clerkUserId` al usuario (y se marca `isVerified=true`).
+  3. Si no, se crea un `User` nuevo con email/username derivados de los claims (con fallbacks seguros si vienen vacíos).
+
+Ejemplo de llamada con token de Clerk:
+
+```bash
+curl -H "Authorization: Bearer <clerk_jwt>" http://localhost:4000/users/my-profile
+```
+
+Endpoints protegidos hoy:
+- `POST /posts`
+- `GET /posts/bookmarks/me`
+- `POST /posts/:postId/bookmark`
+- `DELETE /posts/:postId/bookmark`
+- `GET /users/my-profile`
+- `GET /users/me` (alias)
+- `POST /auth/logout`
+
 ## Auth
 
 ### `POST /auth/register`
