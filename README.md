@@ -44,14 +44,24 @@ Endpoints protegidos:
 
 **Que hace**
 - Guarda un reporte asociado al usuario autenticado (quien reporta se guarda en `reporterId` en base de datos).
+- Puedes enviar el cuerpo como **`application/json`** o como **`multipart/form-data`**.
+- **Imagen subida a S3**: si envias un archivo en el part **`image`** (multipart, campo de archivo, no un string), el backend lo sube al bucket bajo el prefijo **`S3_REPORTS_PREFIX`** (nombre de carpeta en el bucket, ej. `reports/` o `moderation/reports/`; sin barra final se añade una) y guarda en la columna `image` la **clave completa** del objeto, p. ej. `<S3_REPORTS_PREFIX><reporterId>/<timestamp>-<hex>.png`. Si `S3_REPORTS_PREFIX` no está definido, se usa `reports/`. Necesitas **bucket y credenciales**: variable **`AWS_S3_BUCKET`** o, si ya usas otro nombre, **`S3_BUCKET`** (el código acepta cualquiera de las dos), además de `AWS_REGION` y, en local, `AWS_ACCESS_KEY_ID` y `AWS_SECRET_ACCESS_KEY` con permisos `s3:PutObject` al bucket. Si S3 no está configurado o la subida falla, la API responde con **503** y un mensaje explicando el motivo (en lugar de un 500 genérico).
+- **Sin archivo**: en JSON puedes enviar `image` como string (clave S3 existente, ruta, o según vuestro contrato) y no se llama a S3 para subir nada.
+- **Archivo y string `image` a la vez**: se prioriza el archivo; el valor string de `image` se ignora.
 
-**Que pide (body JSON)**
+**Campos (en JSON o en los campos de texto de multipart)**
 - `typeReport` (obligatorio): string, max 50 (ej. categoría: `spam`, `harassment`, etc.)
 - `title` (obligatorio): string, max 150
 - `description` (opcional): string, max 3000
-- `image` (opcional): string, max 512 (URL pública o clave S3 / ruta de evidencia)
+- `image` (opcional): en **JSON**, string, max 512 (clave o referencia; no sube a S3). En **multipart**, usar el part de **archivo** con nombre `image` para subir a S3.
 - `url` (opcional): URL valida (ej. enlace a perfil o contenido reportado)
 - `emailToContact` (opcional): email (ej. contacto de moderación si el flujo lo pide en el formulario)
+
+**Restricciones de archivo (multipart)**
+- Formatos: JPEG, PNG, GIF, WebP.
+- Tamaño max: 5 MB.
+
+**Ejemplo JSON**
 
 ```json
 {
@@ -64,8 +74,21 @@ Endpoints protegidos:
 }
 ```
 
+**Ejemplo multipart (curl)**
+
+```bash
+curl -X POST http://localhost:4000/reports \
+  -H "Authorization: Bearer <access_token>" \
+  -F "typeReport=harassment" \
+  -F "title=Comportamiento inapropiado" \
+  -F "description=Detalles..." \
+  -F "url=https://nuvix.dev/users/usuario" \
+  -F "emailToContact=mod@nuvix.dev" \
+  -F "image=@/ruta/local/captura.png;type=image/png"
+```
+
 **Respuesta (HTTP 201)**
-- Devuelve el registro creado, incluyendo el `id` generado y `reporterId` (ID del usuario del token), mas los campos guardados y `createdAt` (ISO 8601).
+- Devuelve el registro creado, incluyendo el `id` generado y `reporterId` (ID del usuario del token), mas los campos guardados y `createdAt` (ISO 8601). Tras subir a S3, el campo `image` contiene la clave del objeto (no la URL, salvo que envies en JSON un string con URL/clave).
 
 ```json
 {
@@ -74,7 +97,7 @@ Endpoints protegidos:
   "typeReport": "harassment",
   "title": "Comportamiento inapropiado en DM",
   "description": "Descripcion de lo ocurrido",
-  "image": "photos/user/evidencia.png",
+  "image": "reports/clx..../1745601600000-a1b2c3d4.png",
   "url": "https://nuvix.dev/users/usuario",
   "emailToContact": "mod@nuvix.dev",
   "createdAt": "2026-04-24T12:00:00.000Z"
@@ -82,6 +105,7 @@ Endpoints protegidos:
 ```
 
 - Sin `Authorization: Bearer` o token invalido: `401 Unauthorized`.
+- Imagen con tipo o tamaño no permitido: `400 Bad Request` (o error de multer por tamaño).
 
 ## Auth
 

@@ -1,5 +1,9 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { IsEmail, IsOptional, IsString, IsUrl, MaxLength } from 'class-validator';
+import { Transform } from 'class-transformer';
+import { IsEmail, IsOptional, IsString, MaxLength, Matches } from 'class-validator';
+
+const emptyToUndefined = ({ value }: { value: unknown }) =>
+  value === '' || value === null || value === undefined ? undefined : value;
 
 export class CreateReportDto {
   @ApiProperty({ example: 'spam' })
@@ -13,23 +17,33 @@ export class CreateReportDto {
   title!: string;
 
   @ApiPropertyOptional({ maxLength: 3000, example: 'Details about what happened...' })
+  @Transform(emptyToUndefined)
   @IsOptional()
   @IsString()
   @MaxLength(3000)
   description?: string;
 
-  @ApiPropertyOptional({ example: 'https://example.com/screenshot.png or photos/user/key.png' })
+  @ApiPropertyOptional({
+    example: 'reports/.../key.png o URL https://... (si no envias archivo por multipart)',
+    description:
+      'Clave o URL. Si subes un archivo en el campo "image" (multipart), se guarda en S3 bajo `S3_REPORTS_PREFIX` y este campo se ignora.',
+  })
+  @Transform(emptyToUndefined)
   @IsOptional()
   @IsString()
   @MaxLength(512)
   image?: string;
 
   @ApiPropertyOptional({ example: 'https://nuvix.dev/users/bad-actor' })
+  @Transform(emptyToUndefined)
   @IsOptional()
-  @IsUrl()
+  @IsString()
+  @MaxLength(2048)
+  @Matches(/^https?:\/\//i, { message: 'url debe comenzar con http:// o https://' })
   url?: string;
 
   @ApiPropertyOptional({ example: 'contact@nuvix.dev' })
+  @Transform(emptyToUndefined)
   @IsOptional()
   @IsEmail()
   emailToContact?: string;
