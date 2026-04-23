@@ -7,8 +7,10 @@ import {
   ApiOkResponse,
   ApiOperation,
   ApiTags,
+  ApiTooManyRequestsResponse,
   ApiUnauthorizedResponse,
 } from '@nestjs/swagger';
+import { Throttle } from '@nestjs/throttler';
 import { JwtAuthGuard } from './jwt-auth.guard';
 import { AuthService } from './auth.service';
 import { LoginDto } from './dto/login.dto';
@@ -20,9 +22,11 @@ import { VerifyEmailDto } from './dto/verify-email.dto';
 export class AuthController {
   constructor(private readonly authService: AuthService) {}
 
+  @Throttle({ auth: { ttl: 60_000, limit: 10 } })
   @ApiOperation({ summary: 'Register a new user account' })
   @ApiBody({ type: RegisterDto })
   @ApiConflictResponse({ description: 'Email or username already in use' })
+  @ApiTooManyRequestsResponse({ description: 'Too many requests — try again in a minute' })
   @ApiOkResponse({
     description: 'User registered successfully, verification email sent',
     schema: {
@@ -36,9 +40,11 @@ export class AuthController {
     return this.authService.register(dto);
   }
 
+  @Throttle({ auth: { ttl: 60_000, limit: 10 } })
   @ApiOperation({ summary: 'Login with email and password' })
   @ApiBody({ type: LoginDto })
   @ApiUnauthorizedResponse({ description: 'Invalid credentials' })
+  @ApiTooManyRequestsResponse({ description: 'Too many requests — try again in a minute' })
   @ApiOkResponse({
     description: 'User logged in successfully',
     schema: {
@@ -53,6 +59,7 @@ export class AuthController {
     return this.authService.login(dto);
   }
 
+  @Throttle({ auth: { ttl: 60_000, limit: 10 } })
   @ApiOperation({ summary: 'Verify account email with token' })
   @ApiBody({ type: VerifyEmailDto })
   @ApiOkResponse({
@@ -65,6 +72,7 @@ export class AuthController {
     },
   })
   @ApiBadRequestResponse({ description: 'Invalid or expired token' })
+  @ApiTooManyRequestsResponse({ description: 'Too many requests — try again in a minute' })
   @Post('verify-email')
   verifyEmail(@Body() dto: VerifyEmailDto) {
     return this.authService.verifyEmail(dto);

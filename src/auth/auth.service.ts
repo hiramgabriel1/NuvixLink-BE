@@ -70,7 +70,7 @@ export class AuthService {
       where: { email: dto.email.toLowerCase() },
     });
 
-    if (!user || !user.password) {
+    if (!user) {
       throw new UnauthorizedException('Invalid credentials');
     }
 
