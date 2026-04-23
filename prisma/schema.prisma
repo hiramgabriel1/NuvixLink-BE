@@ -30,6 +30,7 @@ model User {
   posts     Post[]
   likes     Like[]
   bookmarks Bookmark[]
+  reports   Report[]
   emailVerificationToken EmailVerificationToken?
 
   createdAt DateTime @default(now())
@@ -104,3 +105,21 @@ model Bookmark {
   @@index([postId])
 }
 
+model Report {
+  id             String   @id @default(cuid())
+  reporterId     String
+
+  typeReport     String
+  title          String
+  description    String?
+  image          String?
+  url            String?
+  emailToContact String?
+
+  reporter User @relation(fields: [reporterId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+
+  @@index([reporterId])
+  @@index([createdAt])
+}

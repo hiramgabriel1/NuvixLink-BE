@@ -36,6 +36,52 @@ Endpoints protegidos:
 - `GET /users/my-profile`
 - `GET /users/me` (alias)
 - `POST /auth/logout`
+- `POST /reports`
+
+## Reports
+
+### `POST /reports` (Bearer token requerido)
+
+**Que hace**
+- Guarda un reporte asociado al usuario autenticado (quien reporta se guarda en `reporterId` en base de datos).
+
+**Que pide (body JSON)**
+- `typeReport` (obligatorio): string, max 50 (ej. categoría: `spam`, `harassment`, etc.)
+- `title` (obligatorio): string, max 150
+- `description` (opcional): string, max 3000
+- `image` (opcional): string, max 512 (URL pública o clave S3 / ruta de evidencia)
+- `url` (opcional): URL valida (ej. enlace a perfil o contenido reportado)
+- `emailToContact` (opcional): email (ej. contacto de moderación si el flujo lo pide en el formulario)
+
+```json
+{
+  "typeReport": "harassment",
+  "title": "Comportamiento inapropiado en DM",
+  "description": "Descripcion de lo ocurrido",
+  "image": "photos/user/evidencia.png",
+  "url": "https://nuvix.dev/users/usuario",
+  "emailToContact": "mod@nuvix.dev"
+}
+```
+
+**Respuesta (HTTP 201)**
+- Devuelve el registro creado, incluyendo el `id` generado y `reporterId` (ID del usuario del token), mas los campos guardados y `createdAt` (ISO 8601).
+
+```json
+{
+  "id": "clx...",
+  "reporterId": "clx...",
+  "typeReport": "harassment",
+  "title": "Comportamiento inapropiado en DM",
+  "description": "Descripcion de lo ocurrido",
+  "image": "photos/user/evidencia.png",
+  "url": "https://nuvix.dev/users/usuario",
+  "emailToContact": "mod@nuvix.dev",
+  "createdAt": "2026-04-24T12:00:00.000Z"
+}
+```
+
+- Sin `Authorization: Bearer` o token invalido: `401 Unauthorized`.
 
 ## Auth
 
