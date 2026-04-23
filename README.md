@@ -13,3 +13,175 @@ Base backend en **NestJS**.
 - Build: `npm run build`
 - Tests: `npm test` y `npm run test:e2e`
 
+## API Docs
+
+- Swagger UI: `GET /docs`
+- Base URL local: `http://localhost:4000` (o el puerto definido en `PORT`)
+
+## Auth
+
+### `POST /auth/register`
+
+**Que hace**
+- Registra una cuenta nueva.
+- Crea un token de verificacion y envia correo via Resend.
+- **No devuelve JWT** hasta que la cuenta se verifique.
+
+**Que pide (body JSON)**
+```json
+{
+  "email": "user@nuvix.dev",
+  "password": "superSecret123",
+  "username": "hiramdev",
+  "puesto": "Backend Engineer",
+  "description": "Opcional",
+  "techStacks": ["NestJS", "Prisma"],
+  "socialLinks": {
+    "github": "https://github.com/hiramdev"
+  }
+}
+```
+
+**Respuesta esperada**
+```json
+{
+  "message": "Account created. Please verify your email before logging in."
+}
+```
+
+---
+
+### `POST /auth/verify-email`
+
+**Que hace**
+- Verifica la cuenta usando el token enviado por correo.
+- Marca `isVerified = true`.
+- Devuelve JWT para iniciar sesion.
+
+**Que pide (body JSON)**
+```json
+{
+  "token": "token-recibido-en-correo"
+}
+```
+
+---
+
+### `POST /auth/login`
+
+**Que hace**
+- Inicia sesion con email/password.
+- Solo permite login si el usuario ya verifico su correo.
+
+**Que pide (body JSON)**
+```json
+{
+  "email": "user@nuvix.dev",
+  "password": "superSecret123"
+}
+```
+
+**Respuesta esperada**
+```json
+{
+  "accessToken": "jwt-token",
+  "user": {
+    "id": "clx...",
+    "email": "user@nuvix.dev",
+    "username": "hiramdev"
+  }
+}
+```
+
+## Posts
+
+### `POST /posts` (Bearer token requerido)
+
+**Que hace**
+- Crea un post para el usuario autenticado.
+
+**Que pide (body JSON)**
+```json
+{
+  "title": "Mi post",
+  "description": "Opcional",
+  "media": ["posts/123/cover.png"],
+  "website": "https://nuvix.dev",
+  "tags": ["nestjs", "backend"],
+  "isDraft": false
+}
+```
+
+---
+
+### `GET /posts`
+
+**Que hace**
+- Lista posts publicados (`isDraft = false`) ordenados por fecha.
+
+---
+
+### `GET /posts/:id`
+
+**Que hace**
+- Devuelve detalle de un post por ID.
+- Incluye autor y conteos de likes/bookmarks.
+
+---
+
+### `GET /posts/bookmarks/me` (Bearer token requerido)
+
+**Que hace**
+- Lista los bookmarks del usuario autenticado.
+- Incluye los posts guardados.
+
+---
+
+### `POST /posts/:postId/bookmark` (Bearer token requerido)
+
+**Que hace**
+- Guarda un post en bookmarks del usuario autenticado.
+- Es idempotente (no duplica).
+
+**Respuesta ejemplo**
+```json
+{
+  "bookmarked": true
+}
+```
+
+---
+
+### `DELETE /posts/:postId/bookmark` (Bearer token requerido)
+
+**Que hace**
+- Quita un post de bookmarks del usuario autenticado.
+
+**Respuesta ejemplo**
+```json
+{
+  "bookmarked": false
+}
+```
+
+## Users
+
+### `GET /users/trending-builders`
+
+**Que hace**
+- Calcula ranking de builders por seguidores y/o likes recibidos en sus posts.
+
+**Query params opcionales**
+- `by`: `combined | followers | likes` (default: `combined`)
+- `limit`: `1..100` (default: `10`)
+
+**Ejemplo**
+- `GET /users/trending-builders?by=combined&limit=10`
+
+## Health / Base
+
+### `GET /`
+
+**Que hace**
+- Endpoint base de prueba, responde `Hello World!`.
+
