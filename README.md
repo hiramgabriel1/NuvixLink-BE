@@ -30,6 +30,8 @@ El token se obtiene de `POST /auth/login` (o `POST /auth/verify-email` tras regi
 
 Endpoints protegidos:
 - `POST /posts`
+- `POST /posts/:postId/like` (me gusta)
+- `DELETE /posts/:postId/like` (quitar me gusta)
 - `GET /posts/bookmarks/me`
 - `POST /posts/:postId/bookmark`
 - `DELETE /posts/:postId/bookmark`
@@ -208,6 +210,7 @@ curl -X POST http://localhost:4000/reports \
 
 **Que hace**
 - Lista posts publicados (`isDraft = false`) ordenados por fecha.
+- Cada post trae `likesCount` (cuántos likes tiene **ese** post) y `bookmarksCount`, además del autor. Los likes se guardan por `post` en la tabla de likes (un usuario, un post, una fila).
 
 ---
 
@@ -215,7 +218,53 @@ curl -X POST http://localhost:4000/reports \
 
 **Que hace**
 - Devuelve detalle de un post por ID.
-- Incluye autor y conteos de likes/bookmarks.
+- Incluye autor, `likesCount` y `bookmarksCount` (totales de **ese** post).
+- Para listar **quiénes** dieron like, usa `GET /posts/:postId/likes`.
+
+---
+
+### `GET /posts/:postId/likes` (público)
+
+**Que hace**
+- Lista quienes dieron me gusta a un post (solo posts publicados; si es borrador → `404`).
+- Query: `limit` (1–200, default 50), `offset` (default 0).
+
+**Respuesta ejemplo**
+```json
+{
+  "postId": "clh...",
+  "total": 3,
+  "limit": 50,
+  "offset": 0,
+  "items": [
+    { "userId": "clu...", "username": "dev", "photoKey": "https://...", "likedAt": "2025-01-15T10:00:00.000Z" }
+  ]
+}
+```
+
+---
+
+### `POST /posts/:postId/like` (Bearer token requerido)
+
+**Que hace**
+- Añade un me gusta (idempotente: repetir no duplica filas). Devuelve el conteo total.
+
+**Respuesta ejemplo**
+```json
+{ "liked": true, "likesCount": 12 }
+```
+
+---
+
+### `DELETE /posts/:postId/like` (Bearer token requerido)
+
+**Que hace**
+- Quita tu me gusta. Devuelve el conteo total tras el borrado.
+
+**Respuesta ejemplo**
+```json
+{ "liked": false, "likesCount": 11 }
+```
 
 ---
 

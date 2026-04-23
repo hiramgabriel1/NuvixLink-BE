@@ -5,6 +5,7 @@ import {
   Get,
   Param,
   Post as HttpPost,
+  Query,
   Req,
   UseGuards,
 } from '@nestjs/common';
@@ -21,6 +22,7 @@ import {
 } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { CreatePostDto } from './dto/create-post.dto';
+import { PostLikesQueryDto } from './dto/post-likes-query.dto';
 import { PostsService } from './posts.service';
 
 type AuthRequest = Request & {
@@ -62,6 +64,42 @@ export class PostsController {
   @Get('bookmarks/me')
   findMyBookmarks(@Req() req: AuthRequest) {
     return this.postsService.findMyBookmarks(req.user.userId);
+  }
+
+  @ApiOperation({ summary: 'List users who liked a post' })
+  @ApiNotFoundResponse({ description: 'Post not found' })
+  @ApiOkResponse({ description: 'Paginated like list with user summaries' })
+  @Get(':postId/likes')
+  getLikesForPost(@Param('postId') postId: string, @Query() query: PostLikesQueryDto) {
+    return this.postsService.getLikesForPost(postId, query);
+  }
+
+  @ApiOperation({ summary: 'Like a post' })
+  @ApiBearerAuth()
+  @ApiUnauthorizedResponse({ description: 'Missing or invalid bearer token' })
+  @ApiNotFoundResponse({ description: 'Post not found (or draft)' })
+  @ApiOkResponse({
+    description: 'Like applied',
+    schema: { example: { liked: true, likesCount: 12 } },
+  })
+  @UseGuards(JwtAuthGuard)
+  @HttpPost(':postId/like')
+  likePost(@Req() req: AuthRequest, @Param('postId') postId: string) {
+    return this.postsService.likePost(req.user.userId, postId);
+  }
+
+  @ApiOperation({ summary: 'Remove your like from a post' })
+  @ApiBearerAuth()
+  @ApiUnauthorizedResponse({ description: 'Missing or invalid bearer token' })
+  @ApiNotFoundResponse({ description: 'Post not found' })
+  @ApiOkResponse({
+    description: 'Like removed',
+    schema: { example: { liked: false, likesCount: 11 } },
+  })
+  @UseGuards(JwtAuthGuard)
+  @Delete(':postId/like')
+  unlikePost(@Req() req: AuthRequest, @Param('postId') postId: string) {
+    return this.postsService.unlikePost(req.user.userId, postId);
   }
 
   @ApiOperation({ summary: 'Save a post to my bookmarks' })
