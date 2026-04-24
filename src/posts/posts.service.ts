@@ -3,6 +3,7 @@ import {
   ForbiddenException,
   Injectable,
   NotFoundException,
+  UnauthorizedException,
 } from '@nestjs/common';
 import { randomBytes } from 'crypto';
 import type { Express } from 'express';
@@ -10,6 +11,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { S3Service } from '../storage/s3.service';
 import { CreatePostDto } from './dto/create-post.dto';
 import { PostLikesQueryDto } from './dto/post-likes-query.dto';
+import { PostsListFilter, PostsListQueryDto } from './dto/posts-list-query.dto';
 
 const ALLOWED_IMAGE_MIME = new Set(['image/jpeg', 'image/png', 'image/gif', 'image/webp']);
 
@@ -99,26 +101,53 @@ export class PostsService {
     return fromName?.[1] ?? '.bin';
   }
 
-  findAll() {
+  private readonly postListInclude = {
+    author: {
+      select: {
+        id: true,
+        username: true,
+        photoKey: true,
+      } as const,
+    },
+    _count: {
+      select: {
+        likes: true,
+        bookmarks: true,
+      } as const,
+    },
+  };
+
+  async findAll(query: PostsListQueryDto, currentUserId?: string) {
+    const filter = query.filter ?? PostsListFilter.ALL;
+
+    if (filter === PostsListFilter.FOLLOWING) {
+      if (!currentUserId) {
+        throw new UnauthorizedException(
+          'Para ?filter=following debes enviar Authorization: Bearer <token>',
+        );
+      }
+      const following = await this.prisma.follow.findMany({
+        where: { followerId: currentUserId },
+        select: { followingId: true },
+      });
+      const authorIds = following.map((f) => f.followingId);
+      if (authorIds.length === 0) {
+        return [];
+      }
+      return this.prisma.post
+        .findMany({
+          where: { isDraft: false, authorId: { in: authorIds } },
+          orderBy: { createdAt: 'desc' },
+          include: this.postListInclude,
+        })
+        .then((rows) => rows.map(postWithPublicCounts));
+    }
+
     return this.prisma.post
       .findMany({
         where: { isDraft: false },
         orderBy: { createdAt: 'desc' },
-        include: {
-          author: {
-            select: {
-              id: true,
-              username: true,
-              photoKey: true,
-            },
-          },
-          _count: {
-            select: {
-              likes: true,
-              bookmarks: true,
-            },
-          },
-        },
+        include: this.postListInclude,
       })
       .then((rows) => rows.map(postWithPublicCounts));
   }

@@ -27,8 +27,10 @@ import {
   ApiUnauthorizedResponse,
 } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
+import { OptionalJwtAuthGuard } from '../auth/optional-jwt-auth.guard';
 import { CreatePostDto } from './dto/create-post.dto';
 import { PostLikesQueryDto } from './dto/post-likes-query.dto';
+import { PostsListQueryDto } from './dto/posts-list-query.dto';
 import { PostsService } from './posts.service';
 
 const MAX_POST_IMAGES = 20;
@@ -83,11 +85,23 @@ export class PostsController {
     return this.postsService.create(req.user.userId, dto, files);
   }
 
-  @ApiOperation({ summary: 'List published posts' })
+  @ApiOperation({
+    summary: 'List published posts',
+    description:
+      '**`filter=all`** (por defecto): todo el feed público, sin login. **`filter=following`**: posts solo de quienes el usuario autenticado **sigue**; requiere `Authorization: Bearer`.',
+  })
+  @ApiBearerAuth()
   @ApiOkResponse({ description: 'Posts retrieved successfully' })
+  @ApiUnauthorizedResponse({
+    description: 'Solo si usas filter=following sin token o con token inválido',
+  })
+  @UseGuards(OptionalJwtAuthGuard)
   @Get()
-  findAll() {
-    return this.postsService.findAll();
+  findAll(
+    @Query() query: PostsListQueryDto,
+    @Req() req: Request & { user?: AuthRequest['user'] },
+  ) {
+    return this.postsService.findAll(query, req.user?.userId);
   }
 
   @ApiOperation({ summary: 'List my bookmarked posts' })

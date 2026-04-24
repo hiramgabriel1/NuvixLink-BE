@@ -220,8 +220,16 @@ curl -X POST http://localhost:4000/reports \
 ### `GET /posts`
 
 **Que hace**
-- Lista posts publicados (`isDraft = false`) ordenados por fecha.
-- Cada post trae `likesCount` (cuántos likes tiene **ese** post) y `bookmarksCount`, además del autor. Los likes se guardan por `post` en la tabla de likes (un usuario, un post, una fila).
+- Lista posts publicados (`isDraft = false`) ordenados por fecha (más reciente primero).
+- **Query `filter`** (opcional, default `all`):
+  - **`filter=all`** (o sin parámetro): **todos** los posts de la plataforma. **No** requiere autenticación.
+  - **`filter=following`**: solo posts de **quienes tu usuario sigue** (misma idea que un feed de “gente a la que sigo publica”). Requiere **`Authorization: Bearer`**. Si aún no sigues a nadie, la lista viene vacía.
+- Cada post trae `likesCount`, `bookmarksCount` y el autor.
+
+**Ejemplos**
+- `GET /posts`
+- `GET /posts?filter=all`
+- `GET /posts?filter=following` (con Bearer)
 
 ---
 
