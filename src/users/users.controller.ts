@@ -2,9 +2,11 @@ import {
   BadRequestException,
   Body,
   Controller,
+  Delete,
   Get,
   Param,
   Patch,
+  Post,
   Query,
   Req,
   UploadedFile,
@@ -17,9 +19,11 @@ import {
   ApiBearerAuth,
   ApiBody,
   ApiConsumes,
+  ApiBadRequestResponse,
   ApiNotFoundResponse,
   ApiOkResponse,
   ApiOperation,
+  ApiParam,
   ApiQuery,
   ApiTags,
   ApiUnauthorizedResponse,
@@ -92,6 +96,51 @@ export class UsersController {
   @Get('me')
   getMe(@Req() req: AuthRequest) {
     return this.usersService.getMyProfileWithBookmarks(req.user.userId);
+  }
+
+  @ApiOperation({ summary: 'Conteos: cuántos me siguen y a cuántos sigo' })
+  @ApiBearerAuth()
+  @ApiOkResponse({
+    description: 'followersCount = seguidores; followingCount = a cuántos sigues',
+    schema: { example: { followersCount: 12, followingCount: 5 } },
+  })
+  @ApiUnauthorizedResponse({ description: 'Missing or invalid bearer token' })
+  @UseGuards(JwtAuthGuard)
+  @Get('me/follow-counts')
+  getMyFollowCounts(@Req() req: AuthRequest) {
+    return this.usersService.getMyFollowCounts(req.user.userId);
+  }
+
+  @ApiOperation({ summary: 'Dejar de seguir a un usuario' })
+  @ApiBearerAuth()
+  @ApiParam({ name: 'username', example: 'otrodev' })
+  @ApiBadRequestResponse({ description: 'Username vacío o operación no válida' })
+  @ApiNotFoundResponse({ description: 'Usuario no encontrado' })
+  @ApiOkResponse({
+    description: 'Unfollow',
+    schema: { example: { following: false, username: 'otrodev' } },
+  })
+  @ApiUnauthorizedResponse({ description: 'Missing or invalid bearer token' })
+  @UseGuards(JwtAuthGuard)
+  @Delete(':username/follow')
+  unfollowUser(@Req() req: AuthRequest, @Param('username') username: string) {
+    return this.usersService.unfollowUser(req.user.userId, username);
+  }
+
+  @ApiOperation({ summary: 'Seguir a un usuario' })
+  @ApiBearerAuth()
+  @ApiParam({ name: 'username', example: 'otrodev' })
+  @ApiBadRequestResponse({ description: 'Username inválido o intento de seguirse a uno mismo' })
+  @ApiNotFoundResponse({ description: 'Usuario no encontrado' })
+  @ApiOkResponse({
+    description: 'Follow creado o ya existía (idempotente)',
+    schema: { example: { following: true, username: 'otrodev' } },
+  })
+  @ApiUnauthorizedResponse({ description: 'Missing or invalid bearer token' })
+  @UseGuards(JwtAuthGuard)
+  @Post(':username/follow')
+  followUser(@Req() req: AuthRequest, @Param('username') username: string) {
+    return this.usersService.followUser(req.user.userId, username);
   }
 
   @ApiOperation({ summary: 'Get trending builders by followers and/or post likes' })

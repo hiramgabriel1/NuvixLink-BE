@@ -22,7 +22,7 @@ import { VerifyEmailDto } from './dto/verify-email.dto';
 export class AuthController {
   constructor(private readonly authService: AuthService) {}
 
-  @Throttle({ auth: { ttl: 60_000, limit: 10 } })
+  @Throttle({ default: { ttl: 60_000, limit: 10 } })
   @ApiOperation({ summary: 'Register a new user account' })
   @ApiBody({ type: RegisterDto })
   @ApiConflictResponse({ description: 'Email or username already in use' })
@@ -40,7 +40,7 @@ export class AuthController {
     return this.authService.register(dto);
   }
 
-  @Throttle({ auth: { ttl: 60_000, limit: 10 } })
+  @Throttle({ default: { ttl: 60_000, limit: 10 } })
   @ApiOperation({ summary: 'Login with email and password' })
   @ApiBody({ type: LoginDto })
   @ApiUnauthorizedResponse({ description: 'Invalid credentials' })
@@ -59,7 +59,7 @@ export class AuthController {
     return this.authService.login(dto);
   }
 
-  @Throttle({ auth: { ttl: 60_000, limit: 10 } })
+  @Throttle({ default: { ttl: 60_000, limit: 10 } })
   @ApiOperation({ summary: 'Verify account email with token' })
   @ApiBody({ type: VerifyEmailDto })
   @ApiOkResponse({

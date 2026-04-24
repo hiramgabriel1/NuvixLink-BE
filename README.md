@@ -39,6 +39,9 @@ Endpoints protegidos:
 - `GET /users/my-profile`
 - `PATCH /users/my-profile` (JSON o `multipart/form-data` con `photo`; sube a S3 bajo **`S3_USERS_FOLDER`**; prefijo por defecto **`profile-media/`**; en `photoKey` va la **URL pública**). Por defecto **no** se envía ACL a S3 (compatible con *Bucket owner*); hace falta **política de bucket** con `s3:GetObject` al prefijo (ej. `profile-media/*`). Opcional, solo si el bucket acepta ACLs: `S3_OBJECT_PUBLIC_ACL=public-read` o el alias `S3_PROFILE_UPLOAD_ACL=public-read`. Ver [Lectura pública en S3](#lectura-pública-en-s3-fotos-de-perfil-y-de-posts).)
 - `GET /users/me` (alias)
+- `GET /users/me/follow-counts` (seguidores y siguiendo; solo contadores)
+- `POST /users/:username/follow` (seguir; idempotente)
+- `DELETE /users/:username/follow` (dejar de seguir; idempotente)
 - `POST /auth/logout`
 - `POST /reports`
 
@@ -358,6 +361,18 @@ curl -X POST http://localhost:4000/reports \
 - Devuelve el perfil del usuario autenticado.
 - Incluye conteos de followers/following/posts.
 - Incluye bookmarks (ultimos 25) con sus posts.
+
+### `GET /users/me/follow-counts` (Bearer token requerido)
+
+**Que hace**
+- Devuelve solo los numeros: `followersCount` (cuantos te siguen) y `followingCount` (a cuantos sigues). Mas ligero que el perfil completo si solo necesitas esos conteos en la UI.
+
+### `POST` / `DELETE /users/:username/follow` (Bearer token requerido)
+
+**Que hace**
+- `POST` crea la relacion de seguimiento (si ya existia, no falla: idempotente). No puedes seguirte a ti mismo. El `username` es el de la persona a seguir o dejar de seguir; debe ser un usuario existente y activo.
+- `DELETE` quita el seguimiento (si no existia, tampoco falla: idempotente).
+- La respuesta incluye `following: true | false` y el `username` del objetivo.
 
 ### Lectura pública en S3 (fotos de perfil y de posts)
 

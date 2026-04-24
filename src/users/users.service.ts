@@ -55,6 +55,7 @@ export class UsersService {
         socialLinks: true,
         websiteUrl: true,
         isVerified: true,
+        isAdmin: true,
         createdAt: true,
         _count: {
           select: {
@@ -97,6 +98,76 @@ export class UsersService {
       ...profile,
       bookmarks,
     };
+  }
+
+  async getMyFollowCounts(userId: string) {
+    const row = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: {
+        _count: {
+          select: { followers: true, following: true },
+        },
+      },
+    });
+    if (!row) {
+      throw new NotFoundException('User not found');
+    }
+    return {
+      followersCount: row._count.followers,
+      followingCount: row._count.following,
+    };
+  }
+
+  async followUser(followerId: string, targetUsername: string) {
+    const uname = targetUsername.trim();
+    if (!uname) {
+      throw new BadRequestException('username invalido');
+    }
+    const target = await this.prisma.user.findUnique({
+      where: { username: uname },
+      select: { id: true, isActive: true, username: true },
+    });
+    if (!target?.isActive) {
+      throw new NotFoundException('User not found');
+    }
+    if (target.id === followerId) {
+      throw new BadRequestException('No puedes seguirte a ti mismo');
+    }
+    await this.prisma.follow.upsert({
+      where: {
+        followerId_followingId: {
+          followerId,
+          followingId: target.id,
+        },
+      },
+      update: {},
+      create: {
+        followerId,
+        followingId: target.id,
+      },
+    });
+    return { following: true, username: target.username };
+  }
+
+  async unfollowUser(followerId: string, targetUsername: string) {
+    const uname = targetUsername.trim();
+    if (!uname) {
+      throw new BadRequestException('username invalido');
+    }
+    const target = await this.prisma.user.findUnique({
+      where: { username: uname },
+      select: { id: true, username: true },
+    });
+    if (!target) {
+      throw new NotFoundException('User not found');
+    }
+    if (target.id === followerId) {
+      throw new BadRequestException('Operación no válida');
+    }
+    await this.prisma.follow.deleteMany({
+      where: { followerId, followingId: target.id },
+    });
+    return { following: false, username: target.username };
   }
 
   async getProfileByUsername(username: string) {
