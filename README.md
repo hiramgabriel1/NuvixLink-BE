@@ -22,8 +22,11 @@ Base backend en **NestJS**.
 
 Mismo **host y puerto** que el HTTP (no hay puerto extra). Tras levantar el servidor, el front puede conectar con **`socket.io-client`**.
 
-- **Evento** del servidor: `post:created`
-- **Payload:** un post con la **misma forma** que cada elemento de `GET /posts` → `data[]` (mismo `id` que `POST /posts` para deduplicar con el que acabas de crear), **solo** si el post **no** es borrador.
+- **Eventos del servidor**
+  - **`post:created`** — un post con la **misma forma** que cada elemento de `GET /posts` → `data[]` (mismo `id` que `POST /posts` para deduplicar). Solo si el post **no** es borrador.
+  - **`comment:created`** — `{ postId, comment, commentsCount }`. `comment` igual que un ítem de `GET /posts/:postId/comments` → `items[]`. `commentsCount` = total de comentarios del post tras crear.
+  - **`comment:updated`** — `{ postId, comment }` (misma forma de `comment` que arriba).
+  - **`comment:deleted`** — `{ postId, commentId, commentsCount }` (total tras borrar).
 - CORS: mismos orígenes que el API (`CORS_ORIGIN` separada por comas, o `http://localhost:3000`).
 
 Ejemplo mínimo (React, etc.):
@@ -34,8 +37,13 @@ import { io } from 'socket.io-client';
 const base = import.meta.env.VITE_API_URL ?? 'http://localhost:5001';
 const socket = io(base, { withCredentials: true, transports: ['websocket', 'polling'] });
 socket.on('post:created', (post) => {
-  // Anteponer a la lista del feed
+  // Anteponer al feed
 });
+socket.on('comment:created', ({ postId, comment, commentsCount }) => {
+  // Si abriste ese post: añadir comentario; actualizar badge con commentsCount
+});
+socket.on('comment:updated', ({ postId, comment }) => { /* … */ });
+socket.on('comment:deleted', ({ postId, commentId, commentsCount }) => { /* … */ });
 ```
 
 ## Autenticación

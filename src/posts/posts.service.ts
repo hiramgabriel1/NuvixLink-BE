@@ -320,7 +320,7 @@ export class PostsService {
       throw new BadRequestException('El comentario no puede estar vacío');
     }
 
-    return this.prisma.comment.create({
+    const comment = await this.prisma.comment.create({
       data: {
         postId,
         authorId,
@@ -336,6 +336,9 @@ export class PostsService {
         },
       },
     });
+    const commentsCount = await this.prisma.comment.count({ where: { postId } });
+    this.feedGateway.emitCommentCreated({ postId, comment, commentsCount });
+    return comment;
   }
 
   private async getCommentForOwnerOrThrow(
@@ -362,7 +365,7 @@ export class PostsService {
     if (!body) {
       throw new BadRequestException('El comentario no puede estar vacío');
     }
-    return this.prisma.comment.update({
+    const comment = await this.prisma.comment.update({
       where: { id: commentId },
       data: { body },
       select: {
@@ -375,11 +378,15 @@ export class PostsService {
         },
       },
     });
+    this.feedGateway.emitCommentUpdated({ postId, comment });
+    return comment;
   }
 
   async deleteComment(userId: string, postId: string, commentId: string) {
     await this.getCommentForOwnerOrThrow(userId, postId, commentId);
     await this.prisma.comment.delete({ where: { id: commentId } });
+    const commentsCount = await this.prisma.comment.count({ where: { postId } });
+    this.feedGateway.emitCommentDeleted({ postId, commentId, commentsCount });
     return { deleted: true, id: commentId, postId };
   }
 
