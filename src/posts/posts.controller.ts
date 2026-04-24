@@ -5,6 +5,7 @@ import {
   Delete,
   Get,
   Param,
+  Patch,
   Post as HttpPost,
   Query,
   Req,
@@ -28,7 +29,10 @@ import {
 } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { OptionalJwtAuthGuard } from '../auth/optional-jwt-auth.guard';
+import { CreateCommentDto } from './dto/create-comment.dto';
 import { CreatePostDto } from './dto/create-post.dto';
+import { UpdateCommentDto } from './dto/update-comment.dto';
+import { PostCommentsQueryDto } from './dto/post-comments-query.dto';
 import { PostLikesQueryDto } from './dto/post-likes-query.dto';
 import { PostsListQueryDto } from './dto/posts-list-query.dto';
 import { PostsService } from './posts.service';
@@ -120,6 +124,64 @@ export class PostsController {
   @Get(':postId/likes')
   getLikesForPost(@Param('postId') postId: string, @Query() query: PostLikesQueryDto) {
     return this.postsService.getLikesForPost(postId, query);
+  }
+
+  @ApiOperation({ summary: 'List comments on a post (published posts only)' })
+  @ApiNotFoundResponse({ description: 'Post not found' })
+  @ApiOkResponse({ description: 'Comments page (oldest first)' })
+  @Get(':postId/comments')
+  getCommentsForPost(@Param('postId') postId: string, @Query() query: PostCommentsQueryDto) {
+    return this.postsService.getCommentsForPost(postId, query);
+  }
+
+  @ApiOperation({ summary: 'Add a comment to a post' })
+  @ApiBody({ type: CreateCommentDto })
+  @ApiBearerAuth()
+  @ApiUnauthorizedResponse({ description: 'Missing or invalid bearer token' })
+  @ApiNotFoundResponse({ description: 'Post not found (or draft)' })
+  @ApiCreatedResponse({ description: 'Comment created' })
+  @UseGuards(JwtAuthGuard)
+  @HttpPost(':postId/comments')
+  createComment(
+    @Req() req: AuthRequest,
+    @Param('postId') postId: string,
+    @Body() dto: CreateCommentDto,
+  ) {
+    return this.postsService.createComment(req.user.userId, postId, dto);
+  }
+
+  @ApiOperation({ summary: 'Editar tu comentario' })
+  @ApiBody({ type: UpdateCommentDto })
+  @ApiBearerAuth()
+  @ApiUnauthorizedResponse({ description: 'Missing or invalid bearer token' })
+  @ApiNotFoundResponse({ description: 'Post o comentario no encontrado' })
+  @ApiForbiddenResponse({ description: 'No eres el autor del comentario' })
+  @ApiOkResponse({ description: 'Comentario actualizado' })
+  @UseGuards(JwtAuthGuard)
+  @Patch(':postId/comments/:commentId')
+  updateComment(
+    @Req() req: AuthRequest,
+    @Param('postId') postId: string,
+    @Param('commentId') commentId: string,
+    @Body() dto: UpdateCommentDto,
+  ) {
+    return this.postsService.updateComment(req.user.userId, postId, commentId, dto);
+  }
+
+  @ApiOperation({ summary: 'Eliminar tu comentario' })
+  @ApiBearerAuth()
+  @ApiUnauthorizedResponse({ description: 'Missing or invalid bearer token' })
+  @ApiNotFoundResponse({ description: 'Post o comentario no encontrado' })
+  @ApiForbiddenResponse({ description: 'No eres el autor del comentario' })
+  @ApiOkResponse({ description: 'Comentario eliminado' })
+  @UseGuards(JwtAuthGuard)
+  @Delete(':postId/comments/:commentId')
+  deleteComment(
+    @Req() req: AuthRequest,
+    @Param('postId') postId: string,
+    @Param('commentId') commentId: string,
+  ) {
+    return this.postsService.deleteComment(req.user.userId, postId, commentId);
   }
 
   @ApiOperation({ summary: 'Like a post' })

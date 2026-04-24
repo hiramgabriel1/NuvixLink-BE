@@ -9,7 +9,10 @@ import { randomBytes } from 'crypto';
 import type { Express } from 'express';
 import { PrismaService } from '../prisma/prisma.service';
 import { S3Service } from '../storage/s3.service';
+import { CreateCommentDto } from './dto/create-comment.dto';
+import { UpdateCommentDto } from './dto/update-comment.dto';
 import { CreatePostDto } from './dto/create-post.dto';
+import { PostCommentsQueryDto } from './dto/post-comments-query.dto';
 import { PostLikesQueryDto } from './dto/post-likes-query.dto';
 import { PostsListFilter, PostsListQueryDto } from './dto/posts-list-query.dto';
 
@@ -23,13 +26,16 @@ function s3PostMediaKeyPrefix(): string {
   return raw.endsWith('/') ? raw : `${raw}/`;
 }
 
-/** Convierte `_count` de Prisma en campos explícitos por post (likes son por `postId` en la tabla `Like`). */
-function postWithPublicCounts<T extends { _count: { likes: number; bookmarks: number } }>(post: T) {
+/** Convierte `_count` de Prisma en campos explícitos por post (likes, bookmarks, comentarios). */
+function postWithPublicCounts<T extends { _count: { likes: number; bookmarks: number; comments: number } }>(
+  post: T,
+) {
   const { _count, ...rest } = post;
   return {
     ...rest,
     likesCount: _count.likes,
     bookmarksCount: _count.bookmarks,
+    commentsCount: _count.comments,
   };
 }
 
@@ -82,6 +88,7 @@ export class PostsService {
             select: {
               likes: true,
               bookmarks: true,
+              comments: true,
             },
           },
         },
@@ -113,6 +120,7 @@ export class PostsService {
       select: {
         likes: true,
         bookmarks: true,
+        comments: true,
       } as const,
     },
   };
@@ -171,6 +179,7 @@ export class PostsService {
                 select: {
                   likes: true,
                   bookmarks: true,
+                  comments: true,
                 },
               },
             },
@@ -224,6 +233,127 @@ export class PostsService {
     });
 
     return { bookmarked: false };
+  }
+
+  async getCommentsForPost(postId: string, query: PostCommentsQueryDto) {
+    const post = await this.prisma.post.findUnique({
+      where: { id: postId },
+      select: { id: true, isDraft: true },
+    });
+    if (!post || post.isDraft) throw new NotFoundException('Post not found');
+
+    const limit = query.limit ?? 50;
+    const offset = query.offset ?? 0;
+
+    const [rows, total] = await this.prisma.$transaction([
+      this.prisma.comment.findMany({
+        where: { postId },
+        orderBy: { createdAt: 'asc' },
+        take: limit,
+        skip: offset,
+        select: {
+          id: true,
+          body: true,
+          createdAt: true,
+          updatedAt: true,
+          author: {
+            select: { id: true, username: true, photoKey: true },
+          },
+        },
+      }),
+      this.prisma.comment.count({ where: { postId } }),
+    ]);
+
+    return {
+      postId,
+      total,
+      limit,
+      offset,
+      items: rows.map((row) => ({
+        id: row.id,
+        body: row.body,
+        createdAt: row.createdAt,
+        updatedAt: row.updatedAt,
+        author: row.author,
+      })),
+    };
+  }
+
+  async createComment(authorId: string, postId: string, dto: CreateCommentDto) {
+    const post = await this.prisma.post.findUnique({
+      where: { id: postId },
+      select: { id: true, isDraft: true },
+    });
+    if (!post || post.isDraft) {
+      throw new NotFoundException('Post not found');
+    }
+
+    const body = dto.body.trim();
+    if (!body) {
+      throw new BadRequestException('El comentario no puede estar vacío');
+    }
+
+    return this.prisma.comment.create({
+      data: {
+        postId,
+        authorId,
+        body,
+      },
+      select: {
+        id: true,
+        body: true,
+        createdAt: true,
+        updatedAt: true,
+        author: {
+          select: { id: true, username: true, photoKey: true },
+        },
+      },
+    });
+  }
+
+  private async getCommentForOwnerOrThrow(
+    userId: string,
+    postId: string,
+    commentId: string,
+  ) {
+    const found = await this.prisma.comment.findUnique({
+      where: { id: commentId },
+      select: { id: true, postId: true, authorId: true },
+    });
+    if (!found || found.postId !== postId) {
+      throw new NotFoundException('Comment not found');
+    }
+    if (found.authorId !== userId) {
+      throw new ForbiddenException('Solo el autor del comentario puede modificarlo o eliminarlo');
+    }
+    return found;
+  }
+
+  async updateComment(userId: string, postId: string, commentId: string, dto: UpdateCommentDto) {
+    await this.getCommentForOwnerOrThrow(userId, postId, commentId);
+    const body = dto.body.trim();
+    if (!body) {
+      throw new BadRequestException('El comentario no puede estar vacío');
+    }
+    return this.prisma.comment.update({
+      where: { id: commentId },
+      data: { body },
+      select: {
+        id: true,
+        body: true,
+        createdAt: true,
+        updatedAt: true,
+        author: {
+          select: { id: true, username: true, photoKey: true },
+        },
+      },
+    });
+  }
+
+  async deleteComment(userId: string, postId: string, commentId: string) {
+    await this.getCommentForOwnerOrThrow(userId, postId, commentId);
+    await this.prisma.comment.delete({ where: { id: commentId } });
+    return { deleted: true, id: commentId, postId };
   }
 
   async getLikesForPost(postId: string, query: PostLikesQueryDto) {
@@ -324,6 +454,7 @@ export class PostsService {
           select: {
             likes: true,
             bookmarks: true,
+            comments: true,
           },
         },
       },

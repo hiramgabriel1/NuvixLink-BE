@@ -36,6 +36,10 @@ Endpoints protegidos:
 - `GET /posts/bookmarks/me`
 - `POST /posts/:postId/bookmark`
 - `DELETE /posts/:postId/bookmark`
+- `GET /posts/:postId/comments` (listar comentarios; paginado `limit`/`offset`)
+- `POST /posts/:postId/comments` (crear comentario; Bearer)
+- `PATCH /posts/:postId/comments/:commentId` (editar; solo autor; Bearer)
+- `DELETE /posts/:postId/comments/:commentId` (borrar; solo autor del comentario; Bearer)
 - `GET /users/my-profile`
 - `PATCH /users/my-profile` (JSON o `multipart/form-data` con `photo`; sube a S3 bajo **`S3_USERS_FOLDER`**; prefijo por defecto **`profile-media/`**; en `photoKey` va la **URL pública**). Por defecto **no** se envía ACL a S3 (compatible con *Bucket owner*); hace falta **política de bucket** con `s3:GetObject` al prefijo (ej. `profile-media/*`). Opcional, solo si el bucket acepta ACLs: `S3_OBJECT_PUBLIC_ACL=public-read` o el alias `S3_PROFILE_UPLOAD_ACL=public-read`. Ver [Lectura pública en S3](#lectura-pública-en-s3-fotos-de-perfil-y-de-posts).)
 - `GET /users/me` (alias)
@@ -227,7 +231,7 @@ curl -X POST http://localhost:4000/reports \
 - **Query `filter`** (opcional, default `all`):
   - **`filter=all`** (o sin parámetro): **todos** los posts de la plataforma. **No** requiere autenticación.
   - **`filter=following`**: solo posts de **quienes tu usuario sigue** (misma idea que un feed de “gente a la que sigo publica”). Requiere **`Authorization: Bearer`**. Si aún no sigues a nadie, la lista viene vacía.
-- Cada post trae `likesCount`, `bookmarksCount` y el autor.
+- Cada post trae `likesCount`, `bookmarksCount`, `commentsCount` y el autor.
 
 **Ejemplos**
 - `GET /posts`
@@ -240,7 +244,7 @@ curl -X POST http://localhost:4000/reports \
 
 **Que hace**
 - Devuelve detalle de un post por ID.
-- Incluye autor, `likesCount` y `bookmarksCount` (totales de **ese** post).
+- Incluye autor, `likesCount`, `bookmarksCount` y `commentsCount` (totales de **ese** post).
 - Para listar **quiénes** dieron like, usa `GET /posts/:postId/likes`.
 
 ---
@@ -277,6 +281,54 @@ curl -X POST http://localhost:4000/reports \
   ]
 }
 ```
+
+---
+
+### `GET /posts/:postId/comments` (público)
+
+**Que hace**
+- Lista comentarios del post (solo publicados; borrador → `404`). Orden: más antiguos primero.
+- Query: `limit` (1–200, default 50), `offset` (default 0).
+
+**Respuesta ejemplo**
+```json
+{
+  "postId": "clh...",
+  "total": 2,
+  "limit": 50,
+  "offset": 0,
+  "items": [
+    {
+      "id": "cmm...",
+      "body": "Gran post",
+      "createdAt": "2025-01-15T10:00:00.000Z",
+      "updatedAt": "2025-01-15T10:00:00.000Z",
+      "author": { "id": "clu...", "username": "dev", "photoKey": "https://..." }
+    }
+  ]
+}
+```
+
+---
+
+### `POST /posts/:postId/comments` (Bearer token requerido)
+
+**Que hace**
+- Crea un comentario. Cuerpo JSON: `{ "body": "..." }` (1–5000 caracteres).
+
+---
+
+### `PATCH /posts/:postId/comments/:commentId` (Bearer token requerido)
+
+**Que hace**
+- Edita el texto del comentario. Mismo cuerpo que al crear: `{ "body": "..." }`. Solo el **autor** del comentario.
+
+---
+
+### `DELETE /posts/:postId/comments/:commentId` (Bearer token requerido)
+
+**Que hace**
+- Borra el comentario. Solo el **autor** del comentario.
 
 ---
 
