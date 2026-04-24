@@ -46,7 +46,7 @@ export class PostsService {
           key: s3ObjectKey,
           body: file.buffer,
           contentType: file.mimetype,
-          acl: S3Service.profilePhotoUploadAcl(),
+          acl: S3Service.publicObjectWriteAcl(),
         });
         fromUploads.push(S3Service.publicUrlForObjectKey(s3ObjectKey));
       }

@@ -84,15 +84,18 @@ export class S3Service {
   }
 
   /**
-   * Fotos de perfil: por defecto suben con ACL `public-read` para que la URL pública sea legible sin firmar.
-   * `S3_PROFILE_UPLOAD_ACL=off` no envía ACL (si el bucket tiene ACLs desactivadas o usas solo política por prefijo).
+   * PutObject: ACL solo si el bucket aún las admite. Con *Object ownership: bucket owner* no hay ACLs → error
+   * `AccessControlListNotSupported`. Por defecto **no** se envía ACL; la lectura pública se hace con **política de bucket** en el prefijo.
+   * Opt-in: `S3_OBJECT_PUBLIC_ACL=public-read` o `S3_PROFILE_UPLOAD_ACL=public-read` (ambos aceptan `public-read`).
    */
-  static profilePhotoUploadAcl(): 'public-read' | undefined {
-    const v = process.env.S3_PROFILE_UPLOAD_ACL?.trim().toLowerCase();
-    if (v === 'off' || v === '0' || v === 'false' || v === 'none') {
-      return undefined;
+  static publicObjectWriteAcl(): 'public-read' | undefined {
+    const a =
+      process.env.S3_OBJECT_PUBLIC_ACL?.trim().toLowerCase() ||
+      process.env.S3_PROFILE_UPLOAD_ACL?.trim().toLowerCase();
+    if (a === 'public-read' || a === 'public_read') {
+      return 'public-read';
     }
-    return 'public-read';
+    return undefined;
   }
 
   /**
@@ -157,14 +160,13 @@ export class S3Service {
   }
 
   /**
-   * ACL opcional. Para fotos de perfil (URL pública) suele hacer falta `public-read` o una política de bucket; si el bucket
-   * tiene *Block public access* o *Object ownership: bucket owner*, la ACL puede fallar: usa política o desactiva ACLs y política.
+   * `acl` opcional: muchos buckets no permiten ACLs. Sin ACL, aplica `GetObject` por prefijo en la política del bucket.
    */
   async putObject(params: {
     key: string;
     body: Buffer;
     contentType: string;
-    /** `public-read` para que la URL pública S3 (sin firmar) funcione. Desactiva con `S3_PROFILE_UPLOAD_ACL=off`. */
+    /** Solo si pones `S3_OBJECT_PUBLIC_ACL=public-read` (y el bucket acepta ACLs). */
     acl?: 'public-read';
   }): Promise<{ key: string }> {
     const bucket = this.bucket;
