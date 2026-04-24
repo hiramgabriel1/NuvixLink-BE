@@ -3,13 +3,13 @@ import { Type } from 'class-transformer';
 import { IsInt, IsOptional, Max, Min } from 'class-validator';
 
 export class PostCommentsQueryDto {
-  @ApiPropertyOptional({ default: 50, minimum: 1, maximum: 200 })
+  @ApiPropertyOptional({ default: 5, minimum: 1, maximum: 200, description: 'Por defecto 5; el resto con `offset`.' })
   @IsOptional()
   @Type(() => Number)
   @IsInt()
   @Min(1)
   @Max(200)
-  limit?: number = 50;
+  limit?: number = 5;
 
   @ApiPropertyOptional({ default: 0, minimum: 0 })
   @IsOptional()

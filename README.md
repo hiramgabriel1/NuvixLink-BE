@@ -288,14 +288,14 @@ curl -X POST http://localhost:4000/reports \
 
 **Que hace**
 - Lista comentarios del post (solo publicados; borrador → `404`). Orden: más antiguos primero.
-- Query: `limit` (1–200, default 50), `offset` (default 0).
+- Por defecto devuelve **5** comentarios; el resto con paginación: `?limit=5&offset=5`, `?offset=10`, etc. (`limit` 1–200).
 
 **Respuesta ejemplo**
 ```json
 {
   "postId": "clh...",
   "total": 2,
-  "limit": 50,
+  "limit": 5,
   "offset": 0,
   "items": [
     {

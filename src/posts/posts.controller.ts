@@ -126,7 +126,10 @@ export class PostsController {
     return this.postsService.getLikesForPost(postId, query);
   }
 
-  @ApiOperation({ summary: 'List comments on a post (published posts only)' })
+  @ApiOperation({
+    summary: 'List comments on a post (published posts only)',
+    description: 'Default **5** items per request; use `offset` (and optional `limit`) for more pages.',
+  })
   @ApiNotFoundResponse({ description: 'Post not found' })
   @ApiOkResponse({ description: 'Comments page (oldest first)' })
   @Get(':postId/comments')

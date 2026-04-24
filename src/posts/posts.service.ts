@@ -242,7 +242,7 @@ export class PostsService {
     });
     if (!post || post.isDraft) throw new NotFoundException('Post not found');
 
-    const limit = query.limit ?? 50;
+    const limit = query.limit ?? 5;
     const offset = query.offset ?? 0;
 
     const [rows, total] = await this.prisma.$transaction([
