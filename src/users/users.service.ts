@@ -32,6 +32,8 @@ type TrendingBuilder = {
   followersCount: number;
   likesReceivedCount: number;
   score: number;
+  /** Si hay viewer autenticado: si el viewer sigue a este usuario. Sin token, siempre false. */
+  isFollowedByViewer: boolean;
 };
 
 @Injectable()
@@ -292,7 +294,7 @@ export class UsersService {
     return fromName?.[1] ?? '.bin';
   }
 
-  async getTrendingBuilders(query: TrendingBuildersQueryDto) {
+  async getTrendingBuilders(query: TrendingBuildersQueryDto, viewerUserId?: string) {
     const by = query.by ?? TrendingBuildersBy.COMBINED;
     const limit = query.limit ?? 10;
 
@@ -348,6 +350,7 @@ export class UsersService {
         followersCount,
         likesReceivedCount,
         score,
+        isFollowedByViewer: false,
       };
     });
 
@@ -359,11 +362,28 @@ export class UsersService {
       })
       .slice(0, limit);
 
+    let followedIds = new Set<string>();
+    if (viewerUserId && trending.length > 0) {
+      const rows = await this.prisma.follow.findMany({
+        where: {
+          followerId: viewerUserId,
+          followingId: { in: trending.map((t) => t.id) },
+        },
+        select: { followingId: true },
+      });
+      followedIds = new Set(rows.map((r) => r.followingId));
+    }
+
+    const items: TrendingBuilder[] = trending.map((row) => ({
+      ...row,
+      isFollowedByViewer: viewerUserId ? followedIds.has(row.id) : false,
+    }));
+
     return {
       by,
       limit,
       totalCandidates: builders.length,
-      items: trending,
+      items,
     };
   }
 }

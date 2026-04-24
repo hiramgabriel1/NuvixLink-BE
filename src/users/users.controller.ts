@@ -29,6 +29,7 @@ import {
   ApiUnauthorizedResponse,
 } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
+import { OptionalJwtAuthGuard } from '../auth/optional-jwt-auth.guard';
 import { UpdateProfileDto } from './dto/update-profile.dto';
 import { TrendingBuildersBy, TrendingBuildersQueryDto } from './dto/trending-builders-query.dto';
 import { UsersService } from './users.service';
@@ -143,7 +144,12 @@ export class UsersController {
     return this.usersService.followUser(req.user.userId, username);
   }
 
-  @ApiOperation({ summary: 'Get trending builders by followers and/or post likes' })
+  @ApiOperation({
+    summary: 'Get trending builders by followers and/or post likes',
+    description:
+      'Público. Con **Authorization: Bearer** opcional, cada item incluye **`isFollowedByViewer`** para mostrar estado "Siguiendo" tras recargar.',
+  })
+  @ApiBearerAuth()
   @ApiQuery({
     name: 'by',
     required: false,
@@ -155,6 +161,9 @@ export class UsersController {
     required: false,
     type: Number,
     description: 'Max number of users returned (1-100)',
+  })
+  @ApiUnauthorizedResponse({
+    description: 'Solo si envías Bearer y el token es inválido',
   })
   @ApiOkResponse({
     description: 'Trending builders computed successfully',
@@ -174,14 +183,19 @@ export class UsersController {
             followersCount: 120,
             likesReceivedCount: 430,
             score: 550,
+            isFollowedByViewer: true,
           },
         ],
       },
     },
   })
+  @UseGuards(OptionalJwtAuthGuard)
   @Get('trending-builders')
-  getTrendingBuilders(@Query() query: TrendingBuildersQueryDto) {
-    return this.usersService.getTrendingBuilders(query);
+  getTrendingBuilders(
+    @Query() query: TrendingBuildersQueryDto,
+    @Req() req: Request & { user?: AuthRequest['user'] },
+  ) {
+    return this.usersService.getTrendingBuilders(query, req.user?.userId);
   }
 
   @ApiOperation({ summary: 'Get a public profile by username' })

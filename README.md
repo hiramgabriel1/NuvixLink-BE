@@ -345,13 +345,14 @@ curl -X POST http://localhost:4000/reports \
 
 **Que hace**
 - Calcula ranking de builders por seguidores y/o likes recibidos en sus posts.
+- Cada item incluye **`isFollowedByViewer`** (`true` | `false`). Sin `Authorization: Bearer` va todo en `false`. Con JWT válido indica si el usuario autenticado sigue a ese builder (para persistir “Siguiendo” tras F5).
 
 **Query params opcionales**
 - `by`: `combined | followers | likes` (default: `combined`)
 - `limit`: `1..100` (default: `10`)
 
 **Ejemplo**
-- `GET /users/trending-builders?by=combined&limit=10`
+- `GET /users/trending-builders?by=combined&limit=10` (opcional: header `Authorization: Bearer <token>`)
 
 ---
 
