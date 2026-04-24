@@ -7,6 +7,7 @@ import {
 import { Prisma } from '@prisma/client';
 import { randomBytes } from 'crypto';
 import type { Express } from 'express';
+import { NotificationsService } from '../notifications/notifications.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { S3Service } from '../storage/s3.service';
 import { UpdateProfileDto } from './dto/update-profile.dto';
@@ -41,6 +42,7 @@ export class UsersService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly s3: S3Service,
+    private readonly notifications: NotificationsService,
   ) {}
 
   async getMyProfile(userId: string) {
@@ -135,6 +137,14 @@ export class UsersService {
     if (target.id === followerId) {
       throw new BadRequestException('No puedes seguirte a ti mismo');
     }
+    const hadFollow = await this.prisma.follow.findUnique({
+      where: {
+        followerId_followingId: {
+          followerId,
+          followingId: target.id,
+        },
+      },
+    });
     await this.prisma.follow.upsert({
       where: {
         followerId_followingId: {
@@ -148,6 +158,9 @@ export class UsersService {
         followingId: target.id,
       },
     });
+    if (!hadFollow) {
+      void this.notifications.onNewFollower(target.id, followerId).catch(() => undefined);
+    }
     return { following: true, username: target.username };
   }
 

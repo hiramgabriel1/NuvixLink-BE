@@ -80,6 +80,7 @@ Endpoints protegidos:
 - `GET /users/me/follow-counts` (seguidores y siguiendo; solo contadores)
 - `POST /users/:username/follow` (seguir; idempotente)
 - `DELETE /users/:username/follow` (dejar de seguir; idempotente)
+- `GET /notifications`, `GET /notifications/unread-count`, `POST /notifications/read-all`, `PATCH /notifications/:id/read`
 - `POST /auth/logout`
 - `POST /reports`
 - `POST /discussions`, `PATCH /discussions/:id`, `DELETE /discussions/:id` (autor)
@@ -449,6 +450,14 @@ curl -X POST http://localhost:4000/reports \
   "bookmarked": false
 }
 ```
+
+## Notificaciones
+
+- **Migración:** incluye tabla `Notification` (enum `NotificationType`). Ejecuta migraciones.
+- Se generan **automáticamente** al: comentar o mencionar (`@usuario`) en post/discusión, like nuevo en post/discusión, nuevo seguidor.
+- **Tipos** (`type`): `MENTION`, `COMMENT_ON_YOUR_POST`, `LIKE_ON_YOUR_POST`, `COMMENT_ON_YOUR_DISCUSSION`, `LIKE_ON_YOUR_DISCUSSION`, `NEW_FOLLOWER`.
+- Cada registro trae `title`, `preview` (mini texto), `read`, `readAt`, `actor`, y enlaces opcionales `post`, `comment`, `discussion`, `discussionComment` según el caso.
+- **Endpoints:** `GET /notifications?unreadOnly=true|false&limit=&offset=` (respuesta: `data`, `total`, `unreadCount`, `limit`, `offset`); `GET /notifications/unread-count` → `{ unreadCount }`; `PATCH /notifications/:id/read`; `POST /notifications/read-all` → `{ updated: number }`. Todo con **Bearer**.
 
 ## Discusiones (sin imágenes; texto + tags)
 

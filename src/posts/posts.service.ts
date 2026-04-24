@@ -7,9 +7,10 @@ import {
 } from '@nestjs/common';
 import { randomBytes } from 'crypto';
 import type { Express } from 'express';
+import { NotificationsService } from '../notifications/notifications.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { S3Service } from '../storage/s3.service';
-import { FeedGateway } from './feed.gateway';
+import { FeedGateway } from '../realtime/feed.gateway';
 import { CreateCommentDto } from './dto/create-comment.dto';
 import { UpdateCommentDto } from './dto/update-comment.dto';
 import { CreatePostDto } from './dto/create-post.dto';
@@ -46,6 +47,7 @@ export class PostsService {
     private readonly prisma: PrismaService,
     private readonly s3: S3Service,
     private readonly feedGateway: FeedGateway,
+    private readonly notifications: NotificationsService,
   ) {}
 
   async create(authorId: string, dto: CreatePostDto, files?: Express.Multer.File[]) {
@@ -309,7 +311,7 @@ export class PostsService {
   async createComment(authorId: string, postId: string, dto: CreateCommentDto) {
     const post = await this.prisma.post.findUnique({
       where: { id: postId },
-      select: { id: true, isDraft: true },
+      select: { id: true, isDraft: true, authorId: true, title: true },
     });
     if (!post || post.isDraft) {
       throw new NotFoundException('Post not found');
@@ -338,7 +340,43 @@ export class PostsService {
     });
     const commentsCount = await this.prisma.comment.count({ where: { postId } });
     this.feedGateway.emitCommentCreated({ postId, comment, commentsCount });
+    void this.notifyPostCommentAndMentions({
+      post,
+      postId,
+      authorId,
+      body,
+      comment,
+    });
     return comment;
+  }
+
+  private async notifyPostCommentAndMentions(args: {
+    post: { authorId: string; title: string };
+    postId: string;
+    authorId: string;
+    body: string;
+    comment: { id: string; body: string };
+  }) {
+    try {
+      await this.notifications.onCommentOnPost({
+        postAuthorId: args.post.authorId,
+        commentAuthorId: args.authorId,
+        postId: args.postId,
+        postTitle: args.post.title,
+        commentId: args.comment.id,
+        body: args.body,
+      });
+      await this.notifications.onMentionsInPostComment({
+        body: args.body,
+        commentAuthorId: args.authorId,
+        postId: args.postId,
+        postTitle: args.post.title,
+        commentId: args.comment.id,
+        postAuthorId: args.post.authorId,
+      });
+    } catch {
+      // no bloquear comentario si falla notificación
+    }
   }
 
   private async getCommentForOwnerOrThrow(
@@ -440,6 +478,15 @@ export class PostsService {
       throw new NotFoundException('Post not found');
     }
 
+    const alreadyLiked = await this.prisma.like.findUnique({
+      where: {
+        userId_postId: {
+          userId,
+          postId,
+        },
+      },
+    });
+
     await this.prisma.like.upsert({
       where: {
         userId_postId: {
@@ -455,6 +502,17 @@ export class PostsService {
     });
 
     const likesCount = await this.prisma.like.count({ where: { postId } });
+    if (!alreadyLiked) {
+      const forNotify = await this.prisma.post.findUnique({
+        where: { id: postId },
+        select: { authorId: true, title: true },
+      });
+      if (forNotify) {
+        void this.notifications
+          .onLikeOnPost(forNotify.authorId, userId, postId, forNotify.title)
+          .catch(() => undefined);
+      }
+    }
     return { liked: true, likesCount };
   }
 

@@ -4,6 +4,7 @@ import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
 import { AuthModule } from './auth/auth.module';
 import { PrismaModule } from './prisma/prisma.module';
 import { DiscussionsModule } from './discussions/discussions.module';
+import { NotificationsModule } from './notifications/notifications.module';
 import { PostsModule } from './posts/posts.module';
 import { ReportsModule } from './reports/reports.module';
 import { StorageModule } from './storage/storage.module';
@@ -19,6 +20,7 @@ import { AppService } from './app.service';
     AuthModule,
     PostsModule,
     DiscussionsModule,
+    NotificationsModule,
     ReportsModule,
     UsersModule,
   ],

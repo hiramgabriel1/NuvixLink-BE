@@ -6,8 +6,9 @@ import {
   UnauthorizedException,
 } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
+import { NotificationsService } from '../notifications/notifications.service';
 import { PrismaService } from '../prisma/prisma.service';
-import { FeedGateway } from '../posts/feed.gateway';
+import { FeedGateway } from '../realtime/feed.gateway';
 import { CreateCommentDto } from '../posts/dto/create-comment.dto';
 import { PostCommentsQueryDto } from '../posts/dto/post-comments-query.dto';
 import { PostLikesQueryDto } from '../posts/dto/post-likes-query.dto';
@@ -30,6 +31,7 @@ export class DiscussionsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly feedGateway: FeedGateway,
+    private readonly notifications: NotificationsService,
   ) {}
 
   private readonly listInclude = {
@@ -261,7 +263,7 @@ export class DiscussionsService {
   async createComment(authorId: string, discussionId: string, dto: CreateCommentDto) {
     const d = await this.prisma.discussion.findUnique({
       where: { id: discussionId },
-      select: { id: true, isDraft: true },
+      select: { id: true, isDraft: true, authorId: true, title: true },
     });
     if (!d || d.isDraft) {
       throw new NotFoundException('Discussion not found');
@@ -282,6 +284,26 @@ export class DiscussionsService {
     });
     const commentsCount = await this.prisma.discussionComment.count({ where: { discussionId } });
     this.feedGateway.emitDiscussionCommentCreated({ discussionId, comment, commentsCount });
+    try {
+      await this.notifications.onCommentOnDiscussion({
+        discussionAuthorId: d.authorId,
+        commentAuthorId: authorId,
+        discussionId,
+        discussionTitle: d.title,
+        commentId: comment.id,
+        body,
+      });
+      await this.notifications.onMentionsInDiscussionComment({
+        body,
+        commentAuthorId: authorId,
+        discussionId,
+        discussionTitle: d.title,
+        commentId: comment.id,
+        discussionAuthorId: d.authorId,
+      });
+    } catch {
+      /* vacío */
+    }
     return comment;
   }
 
@@ -340,11 +362,16 @@ export class DiscussionsService {
   async likeDiscussion(userId: string, discussionId: string) {
     const d = await this.prisma.discussion.findUnique({
       where: { id: discussionId },
-      select: { id: true, isDraft: true },
+      select: { id: true, isDraft: true, authorId: true, title: true },
     });
     if (!d || d.isDraft) {
       throw new NotFoundException('Discussion not found');
     }
+    const alreadyLiked = await this.prisma.discussionLike.findUnique({
+      where: {
+        userId_discussionId: { userId, discussionId },
+      },
+    });
     await this.prisma.discussionLike.upsert({
       where: {
         userId_discussionId: { userId, discussionId },
@@ -353,6 +380,11 @@ export class DiscussionsService {
       create: { userId, discussionId },
     });
     const likesCount = await this.prisma.discussionLike.count({ where: { discussionId } });
+    if (!alreadyLiked) {
+      void this.notifications
+        .onLikeOnDiscussion(d.authorId, userId, discussionId, d.title)
+        .catch(() => undefined);
+    }
     return { liked: true, likesCount };
   }
 
