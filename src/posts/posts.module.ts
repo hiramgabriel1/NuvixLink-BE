@@ -9,6 +9,7 @@ import { FeedGateway } from './feed.gateway';
   imports: [PrismaModule, AuthModule],
   controllers: [PostsController],
   providers: [PostsService, FeedGateway],
+  exports: [FeedGateway],
 })
 export class PostsModule {}
 

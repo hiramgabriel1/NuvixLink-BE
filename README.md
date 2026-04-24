@@ -27,6 +27,10 @@ Mismo **host y puerto** que el HTTP (no hay puerto extra). Tras levantar el serv
   - **`comment:created`** — `{ postId, comment, commentsCount }`. `comment` igual que un ítem de `GET /posts/:postId/comments` → `items[]`. `commentsCount` = total de comentarios del post tras crear.
   - **`comment:updated`** — `{ postId, comment }` (misma forma de `comment` que arriba).
   - **`comment:deleted`** — `{ postId, commentId, commentsCount }` (total tras borrar).
+- **`discussion:created`** — misma forma que un ítem de `GET /discussions` → `data[]` (solo publicadas, no borradores).
+- **`discussionComment:created`** — `{ discussionId, comment, commentsCount }` (análogo a comentarios de post).
+- **`discussionComment:updated`** — `{ discussionId, comment }`
+- **`discussionComment:deleted`** — `{ discussionId, commentId, commentsCount }`
 - CORS: mismos orígenes que el API (`CORS_ORIGIN` separada por comas, o `http://localhost:3000`).
 
 Ejemplo mínimo (React, etc.):
@@ -44,6 +48,8 @@ socket.on('comment:created', ({ postId, comment, commentsCount }) => {
 });
 socket.on('comment:updated', ({ postId, comment }) => { /* … */ });
 socket.on('comment:deleted', ({ postId, commentId, commentsCount }) => { /* … */ });
+socket.on('discussion:created', (d) => { /* feed de discusiones */ });
+socket.on('discussionComment:created', (p) => { /* … */ });
 ```
 
 ## Autenticación
@@ -76,6 +82,8 @@ Endpoints protegidos:
 - `DELETE /users/:username/follow` (dejar de seguir; idempotente)
 - `POST /auth/logout`
 - `POST /reports`
+- `POST /discussions`, `PATCH /discussions/:id`, `DELETE /discussions/:id` (autor)
+- `POST/DELETE /discussions/:discussionId/like`, comentarios `POST/PATCH/DELETE` en `/discussions/:discussionId/comments/...`
 
 ## Reports
 
@@ -441,6 +449,14 @@ curl -X POST http://localhost:4000/reports \
   "bookmarked": false
 }
 ```
+
+## Discusiones (sin imágenes; texto + tags)
+
+- **Migración:** `npx prisma migrate deploy` (o `migrate dev`) para tablas `Discussion`, `DiscussionLike`, `DiscussionComment`.
+- **Listado:** `GET /discussions?filter=all|following&limit=&offset=` → `{ data, limit, offset, filter }` (como posts). Cada ítem: `id`, `title`, `description`, `tags`, `author`, `likesCount`, `commentsCount`, fechas, `isDraft` (en detalle; el listado solo publica `isDraft: false`).
+- **Detalle:** `GET /discussions/:id`
+- **Crear / editar / borrar:** `POST /discussions` (body JSON: `title`, `description?`, `tags?`, `isDraft?`), `PATCH /discussions/:id`, `DELETE /discussions/:id` (autor; Bearer)
+- **Likes / comentarios:** mismas ideas que en posts, con `discussionId` en la ruta: `GET/POST/DELETE` likes, `GET/POST/PATCH/DELETE` comentarios (misma forma de comentario que en posts; solo texto).
 
 ## Users
 

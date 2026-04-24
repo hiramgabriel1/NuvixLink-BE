@@ -3,6 +3,7 @@ import { APP_GUARD } from '@nestjs/core';
 import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
 import { AuthModule } from './auth/auth.module';
 import { PrismaModule } from './prisma/prisma.module';
+import { DiscussionsModule } from './discussions/discussions.module';
 import { PostsModule } from './posts/posts.module';
 import { ReportsModule } from './reports/reports.module';
 import { StorageModule } from './storage/storage.module';
@@ -17,6 +18,7 @@ import { AppService } from './app.service';
     StorageModule,
     AuthModule,
     PostsModule,
+    DiscussionsModule,
     ReportsModule,
     UsersModule,
   ],

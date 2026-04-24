@@ -4,7 +4,7 @@ import { Server } from 'socket.io';
 import { getCorsOrigins } from '../cors-origins';
 
 /**
- * Eventos: `post:created`, `comment:created`, `comment:updated`, `comment:deleted`.
+ * Eventos: posts (`post:created`, `comment:*`), discusiones (`discussion:created`, `discussionComment:*`).
  * Cliente: `io(url, { withCredentials: true })` y `socket.on('...', …)`.
  */
 @WebSocketGateway({
@@ -45,5 +45,29 @@ export class FeedGateway {
   /** Tras borrar; `commentsCount` es el total que queda en el post. */
   emitCommentDeleted(payload: { postId: string; commentId: string; commentsCount: number }) {
     this.emitIfReady('comment:deleted', payload);
+  }
+
+  emitDiscussionCreated(discussion: unknown) {
+    this.emitIfReady('discussion:created', discussion);
+  }
+
+  emitDiscussionCommentCreated(payload: {
+    discussionId: string;
+    comment: unknown;
+    commentsCount: number;
+  }) {
+    this.emitIfReady('discussionComment:created', payload);
+  }
+
+  emitDiscussionCommentUpdated(payload: { discussionId: string; comment: unknown }) {
+    this.emitIfReady('discussionComment:updated', payload);
+  }
+
+  emitDiscussionCommentDeleted(payload: {
+    discussionId: string;
+    commentId: string;
+    commentsCount: number;
+  }) {
+    this.emitIfReady('discussionComment:deleted', payload);
   }
 }
