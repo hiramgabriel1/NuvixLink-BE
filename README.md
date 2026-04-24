@@ -191,13 +191,23 @@ curl -X POST http://localhost:4000/reports \
 
 **Que hace**
 - Crea un post para el usuario autenticado.
+- Acepta **`application/json`** o **`multipart/form-data`**.
 
-**Que pide (body JSON)**
+**JSON**
+- `title` (obligatorio), resto opcional.
+- `media` es un **array de strings** (URLs o claves S3 **ya** subidas con otro flujo, si aplica). Sin imágenes en el mismo request.
+
+**Multipart (subir fotos con el post)**
+- Mismos campos de texto que en JSON (`title`, `description`, `website`, `tags`, `isDraft`; en form puedes enviar `tags` como `a, b, c` o un string JSON de array; `isDraft` como `true`/`false`).
+- Archivos: uno o varios en el part **`files`** (nombre repetido, máx. 20, 5 MB cada uno). Se suben a S3 bajo el prefijo **`S3_POSTS_FOLDER`** (por defecto `post-media/`), y las **URLs públicas** de esos archivos se **concatenan** a lo que haya en `media` (si pones en `media` más URLs, van primero; luego van las de la subida).
+- Misma configuración S3 que el resto: `S3_BUCKET`, `S3_PROFILE_UPLOAD_ACL` / política pública, etc. Añade en el bucket, si aplica, lectura pública a `.../post-media/*` (o el prefijo que uses).
+
+**Ejemplo JSON**
 ```json
 {
   "title": "Mi post",
   "description": "Opcional",
-  "media": ["posts/123/cover.png"],
+  "media": ["https://.../ya-subida.png"],
   "website": "https://nuvix.dev",
   "tags": ["nestjs", "backend"],
   "isDraft": false

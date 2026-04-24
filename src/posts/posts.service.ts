@@ -1,7 +1,20 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import { randomBytes } from 'crypto';
+import type { Express } from 'express';
 import { PrismaService } from '../prisma/prisma.service';
+import { S3Service } from '../storage/s3.service';
 import { CreatePostDto } from './dto/create-post.dto';
 import { PostLikesQueryDto } from './dto/post-likes-query.dto';
+
+const ALLOWED_IMAGE_MIME = new Set(['image/jpeg', 'image/png', 'image/gif', 'image/webp']);
+
+function s3PostMediaKeyPrefix(): string {
+  const raw = process.env.S3_POSTS_FOLDER?.trim().replace(/^\//, '');
+  if (!raw) {
+    return 'post-media/';
+  }
+  return raw.endsWith('/') ? raw : `${raw}/`;
+}
 
 /** Convierte `_count` de Prisma en campos explícitos por post (likes son por `postId` en la tabla `Like`). */
 function postWithPublicCounts<T extends { _count: { likes: number; bookmarks: number } }>(post: T) {
@@ -15,16 +28,37 @@ function postWithPublicCounts<T extends { _count: { likes: number; bookmarks: nu
 
 @Injectable()
 export class PostsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly s3: S3Service,
+  ) {}
 
-  create(authorId: string, dto: CreatePostDto) {
+  async create(authorId: string, dto: CreatePostDto, files?: Express.Multer.File[]) {
+    const fromUploads: string[] = [];
+    if (files?.length) {
+      for (const file of files) {
+        if (!ALLOWED_IMAGE_MIME.has(file.mimetype)) {
+          throw new BadRequestException('Cada imagen del post debe ser JPEG, PNG, GIF o WebP');
+        }
+        const ext = this.extensionForImage(file.mimetype, file.originalname);
+        const s3ObjectKey = `${s3PostMediaKeyPrefix()}${authorId}/${Date.now()}-${randomBytes(8).toString('hex')}${ext}`;
+        await this.s3.putObject({
+          key: s3ObjectKey,
+          body: file.buffer,
+          contentType: file.mimetype,
+          acl: S3Service.profilePhotoUploadAcl(),
+        });
+        fromUploads.push(S3Service.publicUrlForObjectKey(s3ObjectKey));
+      }
+    }
+    const media = [...(dto.media ?? []), ...fromUploads];
     return this.prisma.post
       .create({
         data: {
           authorId,
           title: dto.title,
           description: dto.description,
-          media: dto.media ?? [],
+          media,
           website: dto.website,
           tags: dto.tags ?? [],
           isDraft: dto.isDraft ?? false,
@@ -46,6 +80,18 @@ export class PostsService {
         },
       })
       .then(postWithPublicCounts);
+  }
+
+  private extensionForImage(mimetype: string, originalname: string): string {
+    const byMime: Record<string, string> = {
+      'image/jpeg': '.jpg',
+      'image/png': '.png',
+      'image/gif': '.gif',
+      'image/webp': '.webp',
+    };
+    if (byMime[mimetype]) return byMime[mimetype];
+    const fromName = originalname?.match(/(\.[a-zA-Z0-9]+)$/);
+    return fromName?.[1] ?? '.bin';
   }
 
   findAll() {

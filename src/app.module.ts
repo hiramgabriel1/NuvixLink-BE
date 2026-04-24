@@ -16,7 +16,7 @@ import { AppService } from './app.service';
       {
         name: 'global',
         ttl: 60_000,
-        limit: 80,
+        limit: 100,
       },
       {
         name: 'auth',

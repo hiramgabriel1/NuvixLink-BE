@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   Body,
   Controller,
   Delete,
@@ -7,12 +8,16 @@ import {
   Post as HttpPost,
   Query,
   Req,
+  UploadedFiles,
   UseGuards,
+  UseInterceptors,
 } from '@nestjs/common';
-import { Request } from 'express';
+import { FilesInterceptor } from '@nestjs/platform-express';
+import { type Express, Request } from 'express';
 import {
   ApiBearerAuth,
   ApiBody,
+  ApiConsumes,
   ApiCreatedResponse,
   ApiNotFoundResponse,
   ApiOkResponse,
@@ -24,6 +29,9 @@ import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { CreatePostDto } from './dto/create-post.dto';
 import { PostLikesQueryDto } from './dto/post-likes-query.dto';
 import { PostsService } from './posts.service';
+
+const MAX_POST_IMAGES = 20;
+const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
 
 type AuthRequest = Request & {
   user: {
@@ -38,15 +46,40 @@ type AuthRequest = Request & {
 export class PostsController {
   constructor(private readonly postsService: PostsService) {}
 
-  @ApiOperation({ summary: 'Create a new post' })
+  @ApiOperation({
+    summary: 'Create a new post',
+    description:
+      '**application/json** (campo `media` opcional: URLs o claves ya subidas) o **multipart/form-data** con el mismo cuerpo de texto y, opcionalmente, uno o varios archivos de imagen en el campo **`files`** (se suben a S3, prefijo `S3_POSTS_FOLDER`, por defecto `post-media/`; las URLs públicas se añaden a `media`).',
+  })
+  @ApiConsumes('application/json', 'multipart/form-data')
   @ApiBearerAuth()
   @ApiBody({ type: CreatePostDto })
   @ApiUnauthorizedResponse({ description: 'Missing or invalid bearer token' })
   @ApiCreatedResponse({ description: 'Post created successfully' })
   @UseGuards(JwtAuthGuard)
+  @UseInterceptors(
+    FilesInterceptor('files', MAX_POST_IMAGES, {
+      limits: { fileSize: MAX_IMAGE_BYTES },
+      fileFilter: (_req, file, cb) => {
+        const ok = /^image\/(jpeg|png|gif|webp)$/.test(file.mimetype);
+        if (!ok) {
+          cb(
+            new BadRequestException('Solo se permiten imágenes JPEG, PNG, GIF o WebP en el post'),
+            false,
+          );
+          return;
+        }
+        cb(null, true);
+      },
+    }),
+  )
   @HttpPost()
-  create(@Req() req: AuthRequest, @Body() dto: CreatePostDto) {
-    return this.postsService.create(req.user.userId, dto);
+  create(
+    @Req() req: AuthRequest,
+    @Body() dto: CreatePostDto,
+    @UploadedFiles() files?: Express.Multer.File[],
+  ) {
+    return this.postsService.create(req.user.userId, dto, files);
   }
 
   @ApiOperation({ summary: 'List published posts' })
