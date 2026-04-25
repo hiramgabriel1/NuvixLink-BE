@@ -36,6 +36,7 @@ import { CreatePostDto } from './dto/create-post.dto';
 import { DraftPostsListQueryDto } from './dto/draft-posts-list-query.dto';
 import { UpdateCommentDto } from './dto/update-comment.dto';
 import { UpdateDraftPostDto } from './dto/update-draft-post.dto';
+import { UpdatePostDto } from './dto/update-post.dto';
 import { PostCommentsQueryDto } from './dto/post-comments-query.dto';
 import { PostLikesQueryDto } from './dto/post-likes-query.dto';
 import { PostsListQueryDto } from './dto/posts-list-query.dto';
@@ -369,6 +370,45 @@ export class PostsController {
   @Delete(':postId/bookmark')
   removeBookmark(@Req() req: AuthRequest, @Param('postId') postId: string) {
     return this.postsService.removeBookmark(req.user.userId, postId);
+  }
+
+  @ApiOperation({
+    summary: 'Editar post publicado (solo el autor)',
+    description:
+      'Actualización parcial. JSON o **multipart/form-data** con `files` opcional (se añaden a `media`). Si envías `media`, reemplaza la lista y se concatenan las subidas. Posts con `isDraft: true` no se editan aquí (404).',
+  })
+  @ApiConsumes('application/json', 'multipart/form-data')
+  @ApiBearerAuth()
+  @ApiBody({ type: UpdatePostDto })
+  @ApiUnauthorizedResponse({ description: 'Missing or invalid bearer token' })
+  @ApiNotFoundResponse({ description: 'Post no encontrado o es borrador en tabla Post' })
+  @ApiForbiddenResponse({ description: 'No eres el autor del post' })
+  @ApiOkResponse({ description: 'Post actualizado (misma forma que GET /posts/:id)' })
+  @UseGuards(JwtAuthGuard)
+  @UseInterceptors(
+    FilesInterceptor('files', MAX_POST_IMAGES, {
+      limits: { fileSize: MAX_IMAGE_BYTES },
+      fileFilter: (_req, file, cb) => {
+        const ok = /^image\/(jpeg|png|gif|webp)$/.test(file.mimetype);
+        if (!ok) {
+          cb(
+            new BadRequestException('Solo se permiten imágenes JPEG, PNG, GIF o WebP en el post'),
+            false,
+          );
+          return;
+        }
+        cb(null, true);
+      },
+    }),
+  )
+  @Patch(':postId')
+  updatePost(
+    @Req() req: AuthRequest,
+    @Param('postId') postId: string,
+    @Body() dto: UpdatePostDto,
+    @UploadedFiles() files?: Express.Multer.File[],
+  ) {
+    return this.postsService.updatePost(req.user.userId, postId, dto, files);
   }
 
   @ApiOperation({ summary: 'Delete a post (author only)' })

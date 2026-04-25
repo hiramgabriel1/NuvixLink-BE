@@ -7,6 +7,7 @@ import {
 } from '@nestjs/common';
 import { randomBytes } from 'crypto';
 import type { Express } from 'express';
+import type { Prisma } from '@prisma/client';
 import { NotificationsService } from '../notifications/notifications.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { S3Service } from '../storage/s3.service';
@@ -20,6 +21,7 @@ import { PostCommentsQueryDto } from './dto/post-comments-query.dto';
 import { PostLikesQueryDto } from './dto/post-likes-query.dto';
 import { PostsListFilter, PostsListQueryDto } from './dto/posts-list-query.dto';
 import { UpdateDraftPostDto } from './dto/update-draft-post.dto';
+import { UpdatePostDto } from './dto/update-post.dto';
 
 const ALLOWED_IMAGE_MIME = new Set(['image/jpeg', 'image/png', 'image/gif', 'image/webp']);
 
@@ -697,6 +699,75 @@ export class PostsService {
     return postWithPublicCounts(post);
   }
 
+  async updatePost(authorId: string, postId: string, dto: UpdatePostDto, files?: Express.Multer.File[]) {
+    const existing = await this.prisma.post.findUnique({
+      where: { id: postId },
+      select: {
+        id: true,
+        authorId: true,
+        isDraft: true,
+        title: true,
+        description: true,
+        media: true,
+        website: true,
+        tags: true,
+      },
+    });
+    if (!existing) throw new NotFoundException('Post not found');
+    if (existing.isDraft) throw new NotFoundException('Post not found');
+    if (existing.authorId !== authorId) {
+      throw new ForbiddenException('Solo el autor del post puede editarlo');
+    }
+
+    const fromUploads = await this.uploadPostImages(authorId, files);
+    const newMedia =
+      dto.media !== undefined
+        ? [...dto.media, ...fromUploads]
+        : fromUploads.length > 0
+          ? [...existing.media, ...fromUploads]
+          : undefined;
+
+    const nextTitle = dto.title !== undefined ? dto.title.trim() : existing.title;
+    if (!nextTitle) {
+      throw new BadRequestException('El título no puede estar vacío');
+    }
+
+    const data: Prisma.PostUpdateInput = {};
+    if (dto.title !== undefined) data.title = nextTitle;
+    if (dto.description !== undefined) data.description = dto.description;
+    if (dto.website !== undefined) data.website = dto.website;
+    if (dto.tags !== undefined) data.tags = dto.tags;
+    if (newMedia !== undefined) data.media = newMedia;
+
+    if (Object.keys(data).length === 0) {
+      return this.findOne(postId);
+    }
+
+    const updated = await this.prisma.post.update({
+      where: { id: postId },
+      data,
+      include: {
+        author: {
+          select: {
+            id: true,
+            username: true,
+            photoKey: true,
+          },
+        },
+        _count: {
+          select: {
+            likes: true,
+            bookmarks: true,
+            comments: true,
+          },
+        },
+      },
+    });
+    const result = postWithPublicCounts(updated);
+    this.feedGateway.emitPostUpdated(result);
+    return result;
+  }
+
   async deletePost(authorId: string, postId: string) {
     const post = await this.prisma.post.findUnique({
       where: { id: postId },
@@ -709,6 +780,7 @@ export class PostsService {
       throw new ForbiddenException('Solo el autor del post puede eliminarlo');
     }
     await this.prisma.post.delete({ where: { id: postId } });
+    this.feedGateway.emitPostDeleted({ postId });
     return { deleted: true, id: postId };
   }
 }

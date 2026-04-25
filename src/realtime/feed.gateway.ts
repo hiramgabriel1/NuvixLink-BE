@@ -10,10 +10,6 @@ import { getCorsOrigins } from '../cors-origins';
 
 type JwtUserPayload = { sub: string };
 
-/**
- * Eventos globales: post/discussion/comment (broadcast).
- * Notificaciones: solo a la sala `user:{userId}` (el cliente envía el JWT al conectar, ver README).
- */
 @WebSocketGateway({
   cors: { origin: getCorsOrigins(), credentials: true },
   transports: ['websocket', 'polling'],
@@ -42,7 +38,7 @@ export class FeedGateway implements OnGatewayConnection {
         this.logger.debug(`Socket ${client.id} joined user:${p.sub}`);
       }
     } catch {
-      /* conexión sigue viva para escuchar eventos globales; sin sala de notificaciones */
+      // conexión sigue viva para escuchar eventos globales; sin sala de notificaciones
     }
   }
 
@@ -66,6 +62,14 @@ export class FeedGateway implements OnGatewayConnection {
 
   emitPostCreated(post: unknown) {
     this.emitIfReady('post:created', post);
+  }
+
+  emitPostUpdated(post: unknown) {
+    this.emitIfReady('post:updated', post);
+  }
+
+  emitPostDeleted(payload: { postId: string }) {
+    this.emitIfReady('post:deleted', payload);
   }
 
   emitCommentCreated(payload: { postId: string; comment: unknown; commentsCount: number }) {
@@ -104,19 +108,15 @@ export class FeedGateway implements OnGatewayConnection {
     this.emitIfReady('discussionComment:deleted', payload);
   }
 
-  // ——— Por usuario (room `user:{id}`) ———
 
-  /** Misma forma que un ítem de `GET /notifications` → `data[]`. */
   emitNotificationCreated(userId: string, notification: unknown) {
     this.emitToUser(userId, 'notification:created', notification);
   }
 
-  /** Tras marcar una como leída; payload = registro con `read: true` y relaciones. */
   emitNotificationUpdated(userId: string, notification: unknown) {
     this.emitToUser(userId, 'notification:updated', notification);
   }
 
-  /** Contador de no leídas (badge) tras crear / leer. */
   emitNotificationsUnread(userId: string, unreadCount: number) {
     this.emitToUser(userId, 'notifications:unread', { unreadCount });
   }
