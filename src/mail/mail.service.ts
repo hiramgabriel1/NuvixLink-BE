@@ -1,6 +1,14 @@
 import { Injectable, InternalServerErrorException } from '@nestjs/common';
 import { Resend } from 'resend';
 
+function escapeHtml(text: string): string {
+  return text
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+
 @Injectable()
 export class MailService {
   private readonly resend = new Resend(process.env.RESEND_API_KEY);
@@ -16,6 +24,82 @@ export class MailService {
     return isDeployedProd ? 'https://www.devshub.dev' : 'http://localhost:3000';
   }
 
+  private buildVerificationEmailContent(params: {
+    username: string;
+    verifyUrl: string;
+  }): { html: string; text: string } {
+    const safeName = escapeHtml(params.username);
+    const { verifyUrl } = params;
+
+    const html = `<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Verifica tu correo</title>
+</head>
+<body style="margin:0;padding:0;background-color:#e8ecf4;">
+  <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background-color:#e8ecf4;padding:40px 16px;">
+    <tr>
+      <td align="center">
+        <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="max-width:520px;background:#ffffff;border-radius:16px;overflow:hidden;box-shadow:0 12px 40px rgba(15,23,42,0.08);">
+          <tr>
+            <td style="height:4px;background:linear-gradient(90deg,#4338ca 0%,#6366f1 50%,#818cf8 100%);"></td>
+          </tr>
+          <tr>
+            <td style="padding:36px 40px 28px;">
+              <p style="margin:0 0 8px;font-family:ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;font-size:13px;font-weight:600;letter-spacing:0.06em;text-transform:uppercase;color:#6366f1;">
+                Confirmación de correo
+              </p>
+              <h1 style="margin:0 0 16px;font-family:ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;font-size:24px;font-weight:700;line-height:1.25;color:#0f172a;">
+                Hola, ${safeName}
+              </h1>
+              <p style="margin:0 0 24px;font-family:ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;font-size:16px;line-height:1.6;color:#475569;">
+                Estás a un paso de activar tu cuenta. Pulsa el botón para verificar que este correo es tuyo.
+              </p>
+              <table role="presentation" cellspacing="0" cellpadding="0" style="margin:0 0 28px;">
+                <tr>
+                  <td style="border-radius:10px;background:#4f46e5;">
+                    <a href="${verifyUrl}" target="_blank" rel="noopener noreferrer" style="display:inline-block;padding:14px 32px;font-family:ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;font-size:16px;font-weight:600;color:#ffffff;text-decoration:none;">
+                      Verificar mi correo
+                    </a>
+                  </td>
+                </tr>
+              </table>
+              <p style="margin:0 0 8px;font-family:ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;font-size:13px;line-height:1.5;color:#64748b;">
+                Si el botón no funciona, copia y pega este enlace en tu navegador:
+              </p>
+              <p style="margin:0 0 24px;word-break:break-all;font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,monospace;font-size:12px;line-height:1.5;color:#4f46e5;">
+                ${verifyUrl}
+              </p>
+              <hr style="margin:0 0 20px;border:none;border-top:1px solid #e2e8f0;">
+              <p style="margin:0;font-family:ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;font-size:13px;line-height:1.55;color:#94a3b8;">
+                Este enlace caduca en <strong style="color:#64748b;">24 horas</strong>. Si no creaste una cuenta, puedes ignorar este mensaje.
+              </p>
+            </td>
+          </tr>
+        </table>
+        <p style="margin:24px 0 0;font-family:ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;font-size:12px;color:#94a3b8;">
+          Mensaje automático · no respondas a este correo
+        </p>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>`;
+
+    const text = [
+      `Hola ${params.username},`,
+      '',
+      'Verifica tu correo abriendo este enlace (válido 24 horas):',
+      verifyUrl,
+      '',
+      'Si no creaste una cuenta, ignora este mensaje.',
+    ].join('\n');
+
+    return { html, text };
+  }
+
   async sendVerificationEmail(params: { email: string; username: string; token: string }) {
     const from = process.env.RESEND_FROM_EMAIL;
     if (!from) {
@@ -23,20 +107,18 @@ export class MailService {
     }
 
     const appUrl = this.getPublicAppBaseUrl();
-    const verifyUrl = `${appUrl}/auth/verify-email?token=${params.token}`;
+    const verifyUrl = `${appUrl}/auth/verify-email?token=${encodeURIComponent(params.token)}`;
+    const { html, text } = this.buildVerificationEmailContent({
+      username: params.username,
+      verifyUrl,
+    });
 
     const result = await this.resend.emails.send({
       from,
       to: params.email,
       subject: 'Verifica tu cuenta',
-      html: `
-        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-          <h2>Hola ${params.username}, confirma tu cuenta</h2>
-          <p>Haz clic en el siguiente enlace para validar tu correo:</p>
-          <p><a href="${verifyUrl}">${verifyUrl}</a></p>
-          <p>Este enlace expira en 24 horas.</p>
-        </div>
-      `,
+      html,
+      text,
     });
 
     if (result.error) {
