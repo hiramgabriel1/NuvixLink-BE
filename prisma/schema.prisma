@@ -39,8 +39,80 @@ model User {
   notificationsReceived  Notification[] @relation("NotificationRecipient")
   notificationsAsActor    Notification[] @relation("NotificationActor")
 
+  challengesCreated         Challenge[]              @relation("ChallengeCreator")
+  challengeSoloEnrollments  ChallengeSoloEnrollment[]
+  challengeTeamMemberships ChallengeTeamMember[]
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+}
+
+enum ChallengeMode {
+  SOLO
+  TEAMS
+}
+
+model Challenge {
+  id               String         @id @default(cuid())
+  creatorId        String
+  title            String
+  description      String?
+  endsAt           DateTime
+  mode             ChallengeMode
+  /// Texto del premio; null/ vacío = sin premio
+  prizeDescription String?
+  createdAt        DateTime       @default(now())
+  updatedAt        DateTime       @updatedAt
+
+  creator          User @relation("ChallengeCreator", fields: [creatorId], references: [id], onDelete: Cascade)
+  soloEnrollments  ChallengeSoloEnrollment[]
+  teams            ChallengeTeam[]
+
+  @@index([creatorId])
+  @@index([endsAt])
+  @@index([mode])
+}
+
+/// Participación en retos en modo individual (un usuario = una fila)
+model ChallengeSoloEnrollment {
+  id          String   @id @default(cuid())
+  challengeId String
+  userId      String
+  createdAt   DateTime @default(now())
+
+  challenge Challenge @relation(fields: [challengeId], references: [id], onDelete: Cascade)
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([challengeId, userId])
+  @@index([userId])
+}
+
+/// Equipo dentro de un reto (modo TEAMS)
+model ChallengeTeam {
+  id          String   @id @default(cuid())
+  challengeId String
+  name        String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  challenge Challenge              @relation(fields: [challengeId], references: [id], onDelete: Cascade)
+  members   ChallengeTeamMember[]
+
+  @@index([challengeId])
+}
+
+model ChallengeTeamMember {
+  id        String   @id @default(cuid())
+  teamId    String
+  userId    String
+  createdAt DateTime @default(now())
+
+  team ChallengeTeam @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  user User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([teamId, userId])
+  @@index([userId])
+  @@index([teamId])
 }
 
 model PendingRegistration {

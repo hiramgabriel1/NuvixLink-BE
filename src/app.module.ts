@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { APP_GUARD } from '@nestjs/core';
 import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
 import { AuthModule } from './auth/auth.module';
+import { ChallengesModule } from './challenges/challenges.module';
 import { PrismaModule } from './prisma/prisma.module';
 import { DiscussionsModule } from './discussions/discussions.module';
 import { NotificationsModule } from './notifications/notifications.module';
@@ -23,6 +24,7 @@ import { AppService } from './app.service';
     NotificationsModule,
     ReportsModule,
     UsersModule,
+    ChallengesModule,
   ],
   controllers: [AppController],
   providers: [
