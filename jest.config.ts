@@ -7,9 +7,6 @@ const config: Config = {
   transform: {
     '^.+\\.(t|j)s$': 'ts-jest',
   },
-  moduleNameMapper: {
-    '^@prisma/client$': '<rootDir>/src/generated/prisma/client.ts',
-  },
   collectCoverageFrom: ['src/**/*.(t|j)s'],
   coverageDirectory: './coverage',
   testEnvironment: 'node',

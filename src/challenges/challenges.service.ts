@@ -5,7 +5,7 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { Challenge, ChallengeMode, Prisma } from '@prisma/client';
+import { Challenge, ChallengeMode, Prisma } from '../generated/prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { ChallengesListQueryDto } from './dto/challenges-list-query.dto';
 import { CreateChallengeDto } from './dto/create-challenge.dto';

@@ -1,5 +1,5 @@
 import { ApiPropertyOptional } from '@nestjs/swagger';
-import { ChallengeMode } from '@prisma/client';
+import { ChallengeMode } from '../../generated/prisma/client';
 import { IsDateString, IsEnum, IsOptional, IsString, MaxLength, MinLength } from 'class-validator';
 
 export class UpdateChallengeDto {

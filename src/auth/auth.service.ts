@@ -5,7 +5,7 @@ import {
   UnauthorizedException,
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
-import { Prisma, User } from '@prisma/client';
+import { Prisma, User } from '../generated/prisma/client';
 import * as bcrypt from 'bcrypt';
 import { randomBytes } from 'crypto';
 import { MailService } from '../mail/mail.service';

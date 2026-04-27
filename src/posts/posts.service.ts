@@ -7,7 +7,7 @@ import {
 } from '@nestjs/common';
 import { randomBytes } from 'crypto';
 import type { Express } from 'express';
-import type { Prisma } from '@prisma/client';
+import type { Prisma } from '../generated/prisma/client';
 import { NotificationsService } from '../notifications/notifications.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { S3Service } from '../storage/s3.service';

@@ -4,7 +4,7 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { Prisma } from '@prisma/client';
+import { Prisma } from '../generated/prisma/client';
 import { randomBytes } from 'crypto';
 import type { Express } from 'express';
 import { NotificationsService } from '../notifications/notifications.service';
