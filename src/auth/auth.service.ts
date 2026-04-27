@@ -27,7 +27,7 @@ export class AuthService {
     const email = dto.email.toLowerCase();
     const username = dto.username;
 
-    const user = await this.prisma.$transaction(async (tx) => {
+    const pending = await this.prisma.$transaction(async (tx) => {
       const existingByEmail = await tx.user.findUnique({
         where: { email },
         select: { id: true, isVerified: true },
@@ -44,21 +44,25 @@ export class AuthService {
         throw new ConflictException('Username already in use');
       }
 
-      const toDeleteIds = new Set<string>();
-      if (existingByEmail?.id) toDeleteIds.add(existingByEmail.id);
-      if (existingByUsername?.id) toDeleteIds.add(existingByUsername.id);
 
-      const ids = [...toDeleteIds];
-      if (ids.length > 0) {
-        await tx.emailVerificationToken.deleteMany({
-          where: { userId: { in: ids } },
-        });
+      const legacyIds = [existingByEmail?.id, existingByUsername?.id].filter(
+        (v): v is string => Boolean(v),
+      );
+      if (legacyIds.length > 0) {
         await tx.user.deleteMany({
-          where: { id: { in: ids }, isVerified: false },
+          where: { id: { in: legacyIds }, isVerified: false },
         });
       }
 
-      return tx.user.create({
+      // Si ya hay intentos pendientes previos (mismo email o username), los reemplazamos.
+      await tx.pendingRegistration.deleteMany({
+        where: { OR: [{ email }, { username }] },
+      });
+
+      const token = randomBytes(32).toString('hex');
+      const expiresAt = new Date(Date.now() + 1000 * 60 * 60 * 24);
+
+      return tx.pendingRegistration.create({
         data: {
           email,
           username,
@@ -67,15 +71,16 @@ export class AuthService {
           description: dto.description,
           techStack: dto.techStacks ?? [],
           socialLinks: dto.socialLinks as Prisma.InputJsonValue | undefined,
+          token,
+          expiresAt,
         },
       });
     });
 
-    const token = await this.generateVerificationToken(user.id);
     await this.mailService.sendVerificationEmail({
-      email: user.email,
-      username: user.username,
-      token,
+      email: pending.email,
+      username: pending.username,
+      token: pending.token,
     });
 
     return {
@@ -105,53 +110,58 @@ export class AuthService {
   }
 
   async verifyEmail(dto: VerifyEmailDto) {
-    const verification = await this.prisma.emailVerificationToken.findUnique({
+    const pending = await this.prisma.pendingRegistration.findUnique({
       where: { token: dto.token },
-      include: { user: true },
     });
 
-    if (!verification) {
+    if (!pending) {
       throw new BadRequestException('Invalid verification token');
     }
 
-    if (verification.expiresAt.getTime() < Date.now()) {
-      await this.prisma.emailVerificationToken.delete({
-        where: { id: verification.id },
+    if (pending.expiresAt.getTime() < Date.now()) {
+      await this.prisma.pendingRegistration.delete({
+        where: { id: pending.id },
       });
       throw new BadRequestException('Verification token expired');
     }
 
-    await this.prisma.$transaction([
-      this.prisma.user.update({
-        where: { id: verification.userId },
-        data: { isVerified: true },
-      }),
-      this.prisma.emailVerificationToken.delete({
-        where: { id: verification.id },
-      }),
-    ]);
+    const user = await this.prisma.$transaction(async (tx) => {
+      const existingByEmail = await tx.user.findUnique({
+        where: { email: pending.email },
+        select: { id: true },
+      });
+      if (existingByEmail) {
+        throw new ConflictException('Email already in use');
+      }
+      const existingByUsername = await tx.user.findUnique({
+        where: { username: pending.username },
+        select: { id: true },
+      });
+      if (existingByUsername) {
+        throw new ConflictException('Username already in use');
+      }
 
-    return this.buildAuthResponse(verification.user);
-  }
+      const created = await tx.user.create({
+        data: {
+          email: pending.email,
+          username: pending.username,
+          password: pending.password,
+          position: pending.position,
+          description: pending.description,
+          techStack: pending.techStack,
+          socialLinks:
+            pending.socialLinks === null
+              ? undefined
+              : (pending.socialLinks as Prisma.InputJsonValue),
+          isVerified: true,
+        },
+      });
 
-  private async generateVerificationToken(userId: string) {
-    const token = randomBytes(32).toString('hex');
-    const expiresAt = new Date(Date.now() + 1000 * 60 * 60 * 24);
-
-    await this.prisma.emailVerificationToken.upsert({
-      where: { userId },
-      create: {
-        userId,
-        token,
-        expiresAt,
-      },
-      update: {
-        token,
-        expiresAt,
-      },
+      await tx.pendingRegistration.delete({ where: { id: pending.id } });
+      return created;
     });
 
-    return token;
+    return this.buildAuthResponse(user);
   }
 
   private buildAuthResponse(user: User) {
