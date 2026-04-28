@@ -1,13 +1,8 @@
-import {
-  BadRequestException,
-  ForbiddenException,
-  Injectable,
-  NotFoundException,
-  UnauthorizedException,
-} from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
 import { randomBytes } from 'crypto';
 import type { Express } from 'express';
 import type { Prisma } from '../generated/prisma/client';
+import { AppError, ErrorCode } from '../common/errors';
 import { NotificationsService } from '../notifications/notifications.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { S3Service } from '../storage/s3.service';
@@ -60,7 +55,10 @@ export class PostsService {
     if (files?.length) {
       for (const file of files) {
         if (!ALLOWED_IMAGE_MIME.has(file.mimetype)) {
-          throw new BadRequestException('Cada imagen del post debe ser JPEG, PNG, GIF o WebP');
+          AppError.badRequest(
+            ErrorCode.POST_IMAGE_TYPE_INVALID,
+            'Cada imagen del post debe ser JPEG, PNG, GIF o WebP',
+          );
         }
         const ext = this.extensionForImage(file.mimetype, file.originalname);
         const s3ObjectKey = `${s3PostMediaKeyPrefix()}${authorId}/${Date.now()}-${randomBytes(8).toString('hex')}${ext}`;
@@ -190,7 +188,7 @@ export class PostsService {
     const draft = await this.prisma.draftPost.findFirst({
       where: { id: draftId, authorId },
     });
-    if (!draft) throw new NotFoundException('Draft not found');
+    if (!draft) AppError.notFound(ErrorCode.POST_DRAFT_NOT_FOUND, 'Draft not found');
     return draft;
   }
 
@@ -203,7 +201,7 @@ export class PostsService {
     const draft = await this.prisma.draftPost.findFirst({
       where: { id: draftId, authorId },
     });
-    if (!draft) throw new NotFoundException('Draft not found');
+    if (!draft) AppError.notFound(ErrorCode.POST_DRAFT_NOT_FOUND, 'Draft not found');
 
     const fromUploads = await this.uploadPostImages(authorId, files);
     const newMedia =
@@ -230,7 +228,7 @@ export class PostsService {
       where: { id: draftId, authorId },
       select: { id: true },
     });
-    if (!draft) throw new NotFoundException('Draft not found');
+    if (!draft) AppError.notFound(ErrorCode.POST_DRAFT_NOT_FOUND, 'Draft not found');
     await this.prisma.draftPost.delete({ where: { id: draftId } });
     return { deleted: true, id: draftId };
   }
@@ -240,10 +238,10 @@ export class PostsService {
       const draft = await tx.draftPost.findFirst({
         where: { id: draftId, authorId },
       });
-      if (!draft) throw new NotFoundException('Draft not found');
+      if (!draft) AppError.notFound(ErrorCode.POST_DRAFT_NOT_FOUND, 'Draft not found');
       const title = draft.title.trim();
       if (!title) {
-        throw new BadRequestException('Añade un título para publicar');
+        AppError.badRequest(ErrorCode.POST_PUBLISH_TITLE_REQUIRED, 'Añade un título para publicar');
       }
 
       const created = await tx.post.create({
@@ -289,7 +287,8 @@ export class PostsService {
 
     if (filter === PostsListFilter.FOLLOWING) {
       if (!currentUserId) {
-        throw new UnauthorizedException(
+        AppError.unauthorized(
+          ErrorCode.POST_AUTH_REQUIRED_FOR_FOLLOWING_FEED,
           'Para ?filter=following debes enviar Authorization: Bearer <token>',
         );
       }
@@ -370,7 +369,7 @@ export class PostsService {
       where: { id: postId },
       select: { id: true },
     });
-    if (!post) throw new NotFoundException('Post not found');
+    if (!post) AppError.notFound(ErrorCode.POST_NOT_FOUND, 'Post not found');
 
     await this.prisma.bookmark.upsert({
       where: {
@@ -394,7 +393,7 @@ export class PostsService {
       where: { id: postId },
       select: { id: true },
     });
-    if (!post) throw new NotFoundException('Post not found');
+    if (!post) AppError.notFound(ErrorCode.POST_NOT_FOUND, 'Post not found');
 
     await this.prisma.bookmark.deleteMany({
       where: {
@@ -411,7 +410,7 @@ export class PostsService {
       where: { id: postId },
       select: { id: true, isDraft: true },
     });
-    if (!post || post.isDraft) throw new NotFoundException('Post not found');
+    if (!post || post.isDraft) AppError.notFound(ErrorCode.POST_NOT_FOUND, 'Post not found');
 
     const limit = query.limit ?? 5;
     const offset = query.offset ?? 0;
@@ -456,12 +455,12 @@ export class PostsService {
       select: { id: true, isDraft: true, authorId: true, title: true },
     });
     if (!post || post.isDraft) {
-      throw new NotFoundException('Post not found');
+      AppError.notFound(ErrorCode.POST_NOT_FOUND, 'Post not found');
     }
 
     const body = dto.body.trim();
     if (!body) {
-      throw new BadRequestException('El comentario no puede estar vacío');
+      AppError.badRequest(ErrorCode.POST_COMMENT_EMPTY, 'El comentario no puede estar vacío');
     }
 
     const comment = await this.prisma.comment.create({
@@ -531,10 +530,13 @@ export class PostsService {
       select: { id: true, postId: true, authorId: true },
     });
     if (!found || found.postId !== postId) {
-      throw new NotFoundException('Comment not found');
+      AppError.notFound(ErrorCode.POST_COMMENT_NOT_FOUND, 'Comment not found');
     }
     if (found.authorId !== userId) {
-      throw new ForbiddenException('Solo el autor del comentario puede modificarlo o eliminarlo');
+      AppError.forbidden(
+        ErrorCode.POST_FORBIDDEN_COMMENT_AUTHOR,
+        'Solo el autor del comentario puede modificarlo o eliminarlo',
+      );
     }
     return found;
   }
@@ -543,7 +545,7 @@ export class PostsService {
     await this.getCommentForOwnerOrThrow(userId, postId, commentId);
     const body = dto.body.trim();
     if (!body) {
-      throw new BadRequestException('El comentario no puede estar vacío');
+      AppError.badRequest(ErrorCode.POST_COMMENT_EMPTY, 'El comentario no puede estar vacío');
     }
     const comment = await this.prisma.comment.update({
       where: { id: commentId },
@@ -575,7 +577,7 @@ export class PostsService {
       where: { id: postId },
       select: { id: true, isDraft: true },
     });
-    if (!post || post.isDraft) throw new NotFoundException('Post not found');
+    if (!post || post.isDraft) AppError.notFound(ErrorCode.POST_NOT_FOUND, 'Post not found');
 
     const limit = query.limit ?? 50;
     const offset = query.offset ?? 0;
@@ -615,9 +617,9 @@ export class PostsService {
       where: { id: postId },
       select: { id: true, isDraft: true },
     });
-    if (!post) throw new NotFoundException('Post not found');
+    if (!post) AppError.notFound(ErrorCode.POST_NOT_FOUND, 'Post not found');
     if (post.isDraft) {
-      throw new NotFoundException('Post not found');
+      AppError.notFound(ErrorCode.POST_NOT_FOUND, 'Post not found');
     }
 
     const alreadyLiked = await this.prisma.like.findUnique({
@@ -663,7 +665,7 @@ export class PostsService {
       where: { id: postId },
       select: { id: true },
     });
-    if (!post) throw new NotFoundException('Post not found');
+    if (!post) AppError.notFound(ErrorCode.POST_NOT_FOUND, 'Post not found');
 
     await this.prisma.like.deleteMany({
       where: { userId, postId },
@@ -694,7 +696,7 @@ export class PostsService {
       },
     });
 
-    if (!post) throw new NotFoundException('Post not found');
+    if (!post) AppError.notFound(ErrorCode.POST_NOT_FOUND, 'Post not found');
 
     return postWithPublicCounts(post);
   }
@@ -713,10 +715,10 @@ export class PostsService {
         tags: true,
       },
     });
-    if (!existing) throw new NotFoundException('Post not found');
-    if (existing.isDraft) throw new NotFoundException('Post not found');
+    if (!existing) AppError.notFound(ErrorCode.POST_NOT_FOUND, 'Post not found');
+    if (existing.isDraft) AppError.notFound(ErrorCode.POST_NOT_FOUND, 'Post not found');
     if (existing.authorId !== authorId) {
-      throw new ForbiddenException('Solo el autor del post puede editarlo');
+      AppError.forbidden(ErrorCode.POST_FORBIDDEN_AUTHOR, 'Solo el autor del post puede editarlo');
     }
 
     const fromUploads = await this.uploadPostImages(authorId, files);
@@ -729,7 +731,7 @@ export class PostsService {
 
     const nextTitle = dto.title !== undefined ? dto.title.trim() : existing.title;
     if (!nextTitle) {
-      throw new BadRequestException('El título no puede estar vacío');
+      AppError.badRequest(ErrorCode.POST_TITLE_EMPTY, 'El título no puede estar vacío');
     }
 
     const data: Prisma.PostUpdateInput = {};
@@ -773,11 +775,9 @@ export class PostsService {
       where: { id: postId },
       select: { id: true, authorId: true },
     });
-    if (!post) {
-      throw new NotFoundException('Post not found');
-    }
+    if (!post) AppError.notFound(ErrorCode.POST_NOT_FOUND, 'Post not found');
     if (post.authorId !== authorId) {
-      throw new ForbiddenException('Solo el autor del post puede eliminarlo');
+      AppError.forbidden(ErrorCode.POST_FORBIDDEN_AUTHOR, 'Solo el autor del post puede eliminarlo');
     }
     await this.prisma.post.delete({ where: { id: postId } });
     this.feedGateway.emitPostDeleted({ postId });

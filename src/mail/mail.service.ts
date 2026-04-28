@@ -1,4 +1,5 @@
-import { Injectable, InternalServerErrorException } from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
+import { AppError, ErrorCode } from '../common/errors';
 import { Resend } from 'resend';
 
 function escapeHtml(text: string): string {
@@ -103,7 +104,7 @@ export class MailService {
   async sendVerificationEmail(params: { email: string; username: string; token: string }) {
     const from = process.env.RESEND_FROM_EMAIL;
     if (!from) {
-      throw new InternalServerErrorException('RESEND_FROM_EMAIL is not configured');
+      AppError.internal(ErrorCode.MAIL_RESEND_NOT_CONFIGURED, 'RESEND_FROM_EMAIL is not configured');
     }
 
     const appUrl = this.getPublicAppBaseUrl();
@@ -122,7 +123,8 @@ export class MailService {
     });
 
     if (result.error) {
-      throw new InternalServerErrorException(
+      AppError.internal(
+        ErrorCode.MAIL_SEND_FAILED,
         `Failed to send verification email: ${result.error.message}`,
       );
     }

@@ -1,5 +1,4 @@
 import {
-  BadRequestException,
   Body,
   Controller,
   Delete,
@@ -28,6 +27,7 @@ import {
   ApiTags,
   ApiUnauthorizedResponse,
 } from '@nestjs/swagger';
+import { AppError, ErrorCode } from '../common/errors';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { OptionalJwtAuthGuard } from '../auth/optional-jwt-auth.guard';
 import { CreateCommentDto } from './dto/create-comment.dto';
@@ -76,7 +76,10 @@ export class PostsController {
         const ok = /^image\/(jpeg|png|gif|webp)$/.test(file.mimetype);
         if (!ok) {
           cb(
-            new BadRequestException('Solo se permiten imágenes JPEG, PNG, GIF o WebP en el post'),
+            AppError.httpBadRequest(
+              ErrorCode.POST_IMAGE_TYPE_INVALID,
+              'Solo se permiten imágenes JPEG, PNG, GIF o WebP en el post',
+            ),
             false,
           );
           return;
@@ -161,7 +164,10 @@ export class PostsController {
         const ok = /^image\/(jpeg|png|gif|webp)$/.test(file.mimetype);
         if (!ok) {
           cb(
-            new BadRequestException('Solo se permiten imágenes JPEG, PNG, GIF o WebP en el post'),
+            AppError.httpBadRequest(
+              ErrorCode.POST_IMAGE_TYPE_INVALID,
+              'Solo se permiten imágenes JPEG, PNG, GIF o WebP en el post',
+            ),
             false,
           );
           return;
@@ -203,7 +209,10 @@ export class PostsController {
         const ok = /^image\/(jpeg|png|gif|webp)$/.test(file.mimetype);
         if (!ok) {
           cb(
-            new BadRequestException('Solo se permiten imágenes JPEG, PNG, GIF o WebP en el post'),
+            AppError.httpBadRequest(
+              ErrorCode.POST_IMAGE_TYPE_INVALID,
+              'Solo se permiten imágenes JPEG, PNG, GIF o WebP en el post',
+            ),
             false,
           );
           return;
@@ -392,7 +401,10 @@ export class PostsController {
         const ok = /^image\/(jpeg|png|gif|webp)$/.test(file.mimetype);
         if (!ok) {
           cb(
-            new BadRequestException('Solo se permiten imágenes JPEG, PNG, GIF o WebP en el post'),
+            AppError.httpBadRequest(
+              ErrorCode.POST_IMAGE_TYPE_INVALID,
+              'Solo se permiten imágenes JPEG, PNG, GIF o WebP en el post',
+            ),
             false,
           );
           return;

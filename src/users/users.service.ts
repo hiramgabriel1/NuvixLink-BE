@@ -1,9 +1,5 @@
-import {
-  BadRequestException,
-  ConflictException,
-  Injectable,
-  NotFoundException,
-} from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
+import { AppError, ErrorCode } from '../common/errors';
 import { Prisma } from '../generated/prisma/client';
 import { randomBytes } from 'crypto';
 import type { Express } from 'express';
@@ -71,7 +67,7 @@ export class UsersService {
       },
     });
 
-    if (!user) throw new NotFoundException('User not found');
+    if (!user) AppError.notFound(ErrorCode.USER_NOT_FOUND, 'User not found');
 
     return user;
   }
@@ -114,7 +110,7 @@ export class UsersService {
       },
     });
     if (!row) {
-      throw new NotFoundException('User not found');
+      AppError.notFound(ErrorCode.USER_NOT_FOUND, 'User not found');
     }
     return {
       followersCount: row._count.followers,
@@ -125,17 +121,17 @@ export class UsersService {
   async followUser(followerId: string, targetUsername: string) {
     const uname = targetUsername.trim();
     if (!uname) {
-      throw new BadRequestException('username invalido');
+      AppError.badRequest(ErrorCode.USER_USERNAME_INVALID, 'username invalido');
     }
     const target = await this.prisma.user.findUnique({
       where: { username: uname },
       select: { id: true, isActive: true, username: true },
     });
     if (!target?.isActive) {
-      throw new NotFoundException('User not found');
+      AppError.notFound(ErrorCode.USER_NOT_FOUND, 'User not found');
     }
     if (target.id === followerId) {
-      throw new BadRequestException('No puedes seguirte a ti mismo');
+      AppError.badRequest(ErrorCode.USER_CANNOT_FOLLOW_SELF, 'No puedes seguirte a ti mismo');
     }
     const hadFollow = await this.prisma.follow.findUnique({
       where: {
@@ -167,17 +163,17 @@ export class UsersService {
   async unfollowUser(followerId: string, targetUsername: string) {
     const uname = targetUsername.trim();
     if (!uname) {
-      throw new BadRequestException('username invalido');
+      AppError.badRequest(ErrorCode.USER_USERNAME_INVALID, 'username invalido');
     }
     const target = await this.prisma.user.findUnique({
       where: { username: uname },
       select: { id: true, username: true },
     });
     if (!target) {
-      throw new NotFoundException('User not found');
+      AppError.notFound(ErrorCode.USER_NOT_FOUND, 'User not found');
     }
     if (target.id === followerId) {
-      throw new BadRequestException('Operación no válida');
+      AppError.badRequest(ErrorCode.USER_INVALID_OPERATION, 'Operación no válida');
     }
     await this.prisma.follow.deleteMany({
       where: { followerId, followingId: target.id },
@@ -208,7 +204,7 @@ export class UsersService {
       },
     });
 
-    if (!user) throw new NotFoundException('User not found');
+    if (!user) AppError.notFound(ErrorCode.USER_NOT_FOUND, 'User not found');
 
     return {
       ...user,
@@ -232,14 +228,17 @@ export class UsersService {
       dto.username !== undefined;
 
     if (!file && !hasText) {
-      throw new BadRequestException('Nada que actualizar: envia al menos un campo o un archivo de foto');
+      AppError.badRequest(
+        ErrorCode.USER_PROFILE_NOTHING_TO_UPDATE,
+        'Nada que actualizar: envia al menos un campo o un archivo de foto',
+      );
     }
 
     const existing = await this.prisma.user.findUnique({
       where: { id: userId },
       select: { id: true, photoKey: true, username: true },
     });
-    if (!existing) throw new NotFoundException('User not found');
+    if (!existing) AppError.notFound(ErrorCode.USER_NOT_FOUND, 'User not found');
 
     if (dto.username !== undefined) {
       const next = dto.username.trim();
@@ -249,7 +248,7 @@ export class UsersService {
           select: { id: true },
         });
         if (taken) {
-          throw new ConflictException('Ese nombre de usuario ya está en uso');
+          AppError.conflict(ErrorCode.USER_USERNAME_IN_USE, 'Ese nombre de usuario ya está en uso');
         }
       }
     }
@@ -257,7 +256,10 @@ export class UsersService {
     let publicPhotoToStore: string | undefined;
     if (file) {
       if (!ALLOWED_IMAGE_MIME.has(file.mimetype)) {
-        throw new BadRequestException('Tipo de imagen no permitido (usa JPEG, PNG, GIF o WebP)');
+        AppError.badRequest(
+          ErrorCode.USER_PROFILE_IMAGE_TYPE_INVALID,
+          'Tipo de imagen no permitido (usa JPEG, PNG, GIF o WebP)',
+        );
       }
       const ext = this.extensionForImage(file.mimetype, file.originalname);
       const s3ObjectKey = `${s3ProfileMediaKeyPrefix()}${userId}/${Date.now()}-${randomBytes(8).toString('hex')}${ext}`;
@@ -280,7 +282,10 @@ export class UsersService {
     if (publicPhotoToStore !== undefined) data.photoKey = publicPhotoToStore;
 
     if (Object.keys(data).length === 0) {
-      throw new BadRequestException('Nada que actualizar: envia al menos un campo o un archivo de foto');
+      AppError.badRequest(
+        ErrorCode.USER_PROFILE_NOTHING_TO_UPDATE,
+        'Nada que actualizar: envia al menos un campo o un archivo de foto',
+      );
     }
 
     await this.prisma.user.update({

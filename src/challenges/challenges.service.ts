@@ -1,11 +1,6 @@
-import {
-  BadRequestException,
-  ConflictException,
-  ForbiddenException,
-  Injectable,
-  NotFoundException,
-} from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
 import { Challenge, ChallengeMode, Prisma } from '../generated/prisma/client';
+import { AppError, ErrorCode } from '../common/errors';
 import { PrismaService } from '../prisma/prisma.service';
 import { ChallengesListQueryDto } from './dto/challenges-list-query.dto';
 import { CreateChallengeDto } from './dto/create-challenge.dto';
@@ -34,7 +29,10 @@ export class ChallengesService {
   async create(userId: string, dto: CreateChallengeDto) {
     const endsAt = new Date(dto.endsAt);
     if (endsAt.getTime() <= Date.now()) {
-      throw new BadRequestException('endsAt debe ser una fecha en el futuro');
+      AppError.badRequest(
+        ErrorCode.CHALLENGE_ENDS_AT_NOT_FUTURE,
+        'endsAt debe ser una fecha en el futuro',
+      );
     }
     const prize = this.normalizePrize(dto.prizeDescription);
     return this.prisma.challenge.create({
@@ -115,7 +113,7 @@ export class ChallengesService {
       },
     });
     if (!challenge) {
-      throw new NotFoundException('Reto no encontrado');
+      AppError.notFound(ErrorCode.CHALLENGE_NOT_FOUND, 'Reto no encontrado');
     }
     return challenge;
   }
@@ -125,11 +123,17 @@ export class ChallengesService {
     if (dto.endsAt !== undefined) {
       const endsAt = new Date(dto.endsAt);
       if (endsAt.getTime() <= Date.now()) {
-        throw new BadRequestException('endsAt debe ser una fecha en el futuro');
+        AppError.badRequest(
+          ErrorCode.CHALLENGE_ENDS_AT_NOT_FUTURE,
+          'endsAt debe ser una fecha en el futuro',
+        );
       }
     }
     if (dto.mode !== undefined && dto.mode !== existing.mode) {
-      throw new BadRequestException('No se puede cambiar el modo (SOLO/TEAMS) de un reto existente');
+      AppError.badRequest(
+        ErrorCode.CHALLENGE_MODE_CHANGE_FORBIDDEN,
+        'No se puede cambiar el modo (SOLO/TEAMS) de un reto existente',
+      );
     }
 
     const data: Prisma.ChallengeUpdateInput = {};
@@ -141,7 +145,7 @@ export class ChallengesService {
     }
 
     if (Object.keys(data).length === 0) {
-      throw new BadRequestException('Nada que actualizar');
+      AppError.badRequest(ErrorCode.CHALLENGE_NOTHING_TO_UPDATE, 'Nada que actualizar');
     }
 
     return this.prisma.challenge.update({
@@ -161,7 +165,10 @@ export class ChallengesService {
   async joinSolo(challengeId: string, userId: string) {
     const c = await this.getChallengeOrThrow(challengeId);
     if (c.mode !== ChallengeMode.SOLO) {
-      throw new BadRequestException('Este reto es por equipos: crea o únete a un equipo');
+      AppError.badRequest(
+        ErrorCode.CHALLENGE_WRONG_MODE_USE_JOIN,
+        'Este reto es por equipos: crea o únete a un equipo',
+      );
     }
     this.assertEnrollmentOpen(c);
 
@@ -171,7 +178,7 @@ export class ChallengesService {
       });
     } catch (e: unknown) {
       if (isPrismaUniqueViolation(e)) {
-        throw new ConflictException('Ya estás inscrito en este reto');
+        AppError.conflict(ErrorCode.CHALLENGE_ALREADY_ENROLLED_SOLO, 'Ya estás inscrito en este reto');
       }
       throw e;
     }
@@ -181,13 +188,16 @@ export class ChallengesService {
   async leaveSolo(challengeId: string, userId: string) {
     const c = await this.getChallengeOrThrow(challengeId);
     if (c.mode !== ChallengeMode.SOLO) {
-      throw new BadRequestException('Usa /teams/leave para retos por equipos');
+      AppError.badRequest(
+        ErrorCode.CHALLENGE_WRONG_MODE_USE_TEAMS_LEAVE,
+        'Usa /teams/leave para retos por equipos',
+      );
     }
     const res = await this.prisma.challengeSoloEnrollment.deleteMany({
       where: { challengeId, userId },
     });
     if (res.count === 0) {
-      throw new NotFoundException('No estabas inscrito en este reto');
+      AppError.notFound(ErrorCode.CHALLENGE_SOLO_NOT_ENROLLED, 'No estabas inscrito en este reto');
     }
     return { left: true, mode: 'SOLO' as const };
   }
@@ -195,7 +205,10 @@ export class ChallengesService {
   async createTeam(challengeId: string, userId: string, dto: CreateTeamDto) {
     const c = await this.getChallengeOrThrow(challengeId);
     if (c.mode !== ChallengeMode.TEAMS) {
-      throw new BadRequestException('Este reto es individual: usa /join');
+      AppError.badRequest(
+        ErrorCode.CHALLENGE_WRONG_MODE_USE_JOIN,
+        'Este reto es individual: usa /join',
+      );
     }
     this.assertEnrollmentOpen(c);
     await this.assertUserNotInAnyTeamForChallenge(challengeId, userId);
@@ -225,7 +238,10 @@ export class ChallengesService {
   async joinTeam(challengeId: string, teamId: string, userId: string) {
     const c = await this.getChallengeOrThrow(challengeId);
     if (c.mode !== ChallengeMode.TEAMS) {
-      throw new BadRequestException('Este reto no usa equipos');
+      AppError.badRequest(
+        ErrorCode.CHALLENGE_TEAM_MODE_NOT_APPLICABLE,
+        'Este reto no usa equipos',
+      );
     }
     this.assertEnrollmentOpen(c);
 
@@ -233,7 +249,7 @@ export class ChallengesService {
       where: { id: teamId, challengeId },
     });
     if (!team) {
-      throw new NotFoundException('Equipo no encontrado en este reto');
+      AppError.notFound(ErrorCode.CHALLENGE_TEAM_NOT_FOUND, 'Equipo no encontrado en este reto');
     }
     await this.assertUserNotInAnyTeamForChallenge(challengeId, userId);
 
@@ -243,7 +259,7 @@ export class ChallengesService {
       });
     } catch (e: unknown) {
       if (isPrismaUniqueViolation(e)) {
-        throw new ConflictException('Ya perteneces a este equipo');
+        AppError.conflict(ErrorCode.CHALLENGE_TEAM_ALREADY_MEMBER, 'Ya perteneces a este equipo');
       }
       throw e;
     }
@@ -253,7 +269,10 @@ export class ChallengesService {
   async leaveTeam(challengeId: string, userId: string) {
     const c = await this.getChallengeOrThrow(challengeId);
     if (c.mode !== ChallengeMode.TEAMS) {
-      throw new BadRequestException('Usa /leave en retos individuales');
+      AppError.badRequest(
+        ErrorCode.CHALLENGE_WRONG_MODE_USE_SOLO_LEAVE,
+        'Usa /leave en retos individuales',
+      );
     }
 
     const membership = await this.prisma.challengeTeamMember.findFirst({
@@ -261,7 +280,10 @@ export class ChallengesService {
       include: { team: true },
     });
     if (!membership) {
-      throw new NotFoundException('No estás en ningún equipo de este reto');
+      AppError.notFound(
+        ErrorCode.CHALLENGE_TEAM_NOT_A_MEMBER,
+        'No estás en ningún equipo de este reto',
+      );
     }
 
     await this.prisma.$transaction(async (tx) => {
@@ -286,24 +308,27 @@ export class ChallengesService {
   private async getChallengeOrThrow(id: string): Promise<Challenge> {
     const c = await this.prisma.challenge.findUnique({ where: { id } });
     if (!c) {
-      throw new NotFoundException('Reto no encontrado');
+      AppError.notFound(ErrorCode.CHALLENGE_NOT_FOUND, 'Reto no encontrado');
     }
     return c;
   }
 
   private assertEnrollmentOpen(c: Challenge) {
     if (c.endsAt.getTime() < Date.now()) {
-      throw new BadRequestException('El plazo de este reto ya finalizó');
+      AppError.badRequest(ErrorCode.CHALLENGE_ENDED, 'El plazo de este reto ya finalizó');
     }
   }
 
   private async requireChallengeForCreator(challengeId: string, userId: string) {
     const c = await this.prisma.challenge.findUnique({ where: { id: challengeId } });
     if (!c) {
-      throw new NotFoundException('Reto no encontrado');
+      AppError.notFound(ErrorCode.CHALLENGE_NOT_FOUND, 'Reto no encontrado');
     }
     if (c.creatorId !== userId) {
-      throw new ForbiddenException('Solo el creador puede editar o eliminar el reto');
+      AppError.forbidden(
+        ErrorCode.CHALLENGE_FORBIDDEN_NOT_CREATOR,
+        'Solo el creador puede editar o eliminar el reto',
+      );
     }
     return c;
   }
@@ -314,7 +339,10 @@ export class ChallengesService {
       select: { id: true },
     });
     if (existing) {
-      throw new ConflictException('Ya estás en un equipo de este reto; sal antes de unirte a otro');
+      AppError.conflict(
+        ErrorCode.CHALLENGE_TEAM_CONFLICT_ALREADY_IN_TEAM,
+        'Ya estás en un equipo de este reto; sal antes de unirte a otro',
+      );
     }
   }
 }

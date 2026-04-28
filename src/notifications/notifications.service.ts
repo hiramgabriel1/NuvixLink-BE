@@ -1,4 +1,5 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
+import { AppError, ErrorCode } from '../common/errors';
 import { Prisma, NotificationType } from '../generated/prisma/client';
 import { FeedGateway } from '../realtime/feed.gateway';
 import { PrismaService } from '../prisma/prisma.service';
@@ -58,7 +59,7 @@ export class NotificationsService {
       where: { id: notificationId, userId },
     });
     if (!n) {
-      throw new NotFoundException('Notificación no encontrada');
+      AppError.notFound(ErrorCode.NOTIFICATION_NOT_FOUND, 'Notificación no encontrada');
     }
     if (n.read) {
       return n;

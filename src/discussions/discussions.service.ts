@@ -1,11 +1,6 @@
-import {
-  BadRequestException,
-  ForbiddenException,
-  Injectable,
-  NotFoundException,
-  UnauthorizedException,
-} from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
 import { Prisma } from '../generated/prisma/client';
+import { AppError, ErrorCode } from '../common/errors';
 import { NotificationsService } from '../notifications/notifications.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { FeedGateway } from '../realtime/feed.gateway';
@@ -75,7 +70,8 @@ export class DiscussionsService {
 
     if (filter === DiscussionsListFilter.FOLLOWING) {
       if (!currentUserId) {
-        throw new UnauthorizedException(
+        AppError.unauthorized(
+          ErrorCode.DISCUSSION_AUTH_REQUIRED_FOR_FOLLOWING_FEED,
           'Para ?filter=following debes enviar Authorization: Bearer <token>',
         );
       }
@@ -125,7 +121,7 @@ export class DiscussionsService {
         _count: { select: { likes: true, comments: true } },
       },
     });
-    if (!row) throw new NotFoundException('Discussion not found');
+    if (!row) AppError.notFound(ErrorCode.DISCUSSION_NOT_FOUND, 'Discussion not found');
     return discussionWithPublicCounts(row);
   }
 
@@ -134,14 +130,14 @@ export class DiscussionsService {
       where: { id },
       select: { id: true, authorId: true },
     });
-    if (!existing) throw new NotFoundException('Discussion not found');
+    if (!existing) AppError.notFound(ErrorCode.DISCUSSION_NOT_FOUND, 'Discussion not found');
     if (existing.authorId !== authorId) {
-      throw new ForbiddenException('Solo el autor puede editar la discusión');
+      AppError.forbidden(ErrorCode.DISCUSSION_FORBIDDEN_EDIT, 'Solo el autor puede editar la discusión');
     }
     const data: Prisma.DiscussionUpdateInput = {};
     if (dto.title !== undefined) {
       const t = dto.title.trim();
-      if (!t) throw new BadRequestException('El título no puede quedar vacío');
+      if (!t) AppError.badRequest(ErrorCode.DISCUSSION_TITLE_EMPTY, 'El título no puede quedar vacío');
       data.title = t;
     }
     if (dto.description !== undefined) {
@@ -154,7 +150,7 @@ export class DiscussionsService {
       data.isDraft = dto.isDraft;
     }
     if (Object.keys(data).length === 0) {
-      throw new BadRequestException('Nada que actualizar');
+      AppError.badRequest(ErrorCode.DISCUSSION_NOTHING_TO_UPDATE, 'Nada que actualizar');
     }
     const row = await this.prisma.discussion.update({
       where: { id },
@@ -172,9 +168,9 @@ export class DiscussionsService {
       where: { id },
       select: { id: true, authorId: true },
     });
-    if (!existing) throw new NotFoundException('Discussion not found');
+    if (!existing) AppError.notFound(ErrorCode.DISCUSSION_NOT_FOUND, 'Discussion not found');
     if (existing.authorId !== authorId) {
-      throw new ForbiddenException('Solo el autor puede eliminar la discusión');
+      AppError.forbidden(ErrorCode.DISCUSSION_FORBIDDEN_DELETE, 'Solo el autor puede eliminar la discusión');
     }
     await this.prisma.discussion.delete({ where: { id } });
     return { deleted: true, id };
@@ -185,7 +181,7 @@ export class DiscussionsService {
       where: { id: discussionId },
       select: { id: true, isDraft: true },
     });
-    if (!d || d.isDraft) throw new NotFoundException('Discussion not found');
+    if (!d || d.isDraft) AppError.notFound(ErrorCode.DISCUSSION_NOT_FOUND, 'Discussion not found');
 
     const limit = query.limit ?? 50;
     const offset = query.offset ?? 0;
@@ -223,7 +219,7 @@ export class DiscussionsService {
       where: { id: discussionId },
       select: { id: true, isDraft: true },
     });
-    if (!d || d.isDraft) throw new NotFoundException('Discussion not found');
+    if (!d || d.isDraft) AppError.notFound(ErrorCode.DISCUSSION_NOT_FOUND, 'Discussion not found');
 
     const limit = query.limit ?? 5;
     const offset = query.offset ?? 0;
@@ -266,11 +262,11 @@ export class DiscussionsService {
       select: { id: true, isDraft: true, authorId: true, title: true },
     });
     if (!d || d.isDraft) {
-      throw new NotFoundException('Discussion not found');
+      AppError.notFound(ErrorCode.DISCUSSION_NOT_FOUND, 'Discussion not found');
     }
     const body = dto.body.trim();
     if (!body) {
-      throw new BadRequestException('El comentario no puede estar vacío');
+      AppError.badRequest(ErrorCode.DISCUSSION_COMMENT_EMPTY, 'El comentario no puede estar vacío');
     }
     const comment = await this.prisma.discussionComment.create({
       data: { discussionId, authorId, body },
@@ -317,10 +313,13 @@ export class DiscussionsService {
       select: { id: true, discussionId: true, authorId: true },
     });
     if (!found || found.discussionId !== discussionId) {
-      throw new NotFoundException('Comment not found');
+      AppError.notFound(ErrorCode.DISCUSSION_COMMENT_NOT_FOUND, 'Comment not found');
     }
     if (found.authorId !== userId) {
-      throw new ForbiddenException('Solo el autor del comentario puede modificarlo o eliminarlo');
+      AppError.forbidden(
+        ErrorCode.DISCUSSION_FORBIDDEN_COMMENT_AUTHOR,
+        'Solo el autor del comentario puede modificarlo o eliminarlo',
+      );
     }
     return found;
   }
@@ -334,7 +333,7 @@ export class DiscussionsService {
     await this.getDiscussionCommentForOwnerOrThrow(userId, discussionId, commentId);
     const body = dto.body.trim();
     if (!body) {
-      throw new BadRequestException('El comentario no puede estar vacío');
+      AppError.badRequest(ErrorCode.DISCUSSION_COMMENT_EMPTY, 'El comentario no puede estar vacío');
     }
     const comment = await this.prisma.discussionComment.update({
       where: { id: commentId },
@@ -365,7 +364,7 @@ export class DiscussionsService {
       select: { id: true, isDraft: true, authorId: true, title: true },
     });
     if (!d || d.isDraft) {
-      throw new NotFoundException('Discussion not found');
+      AppError.notFound(ErrorCode.DISCUSSION_NOT_FOUND, 'Discussion not found');
     }
     const alreadyLiked = await this.prisma.discussionLike.findUnique({
       where: {
@@ -393,7 +392,7 @@ export class DiscussionsService {
       where: { id: discussionId },
       select: { id: true },
     });
-    if (!d) throw new NotFoundException('Discussion not found');
+    if (!d) AppError.notFound(ErrorCode.DISCUSSION_NOT_FOUND, 'Discussion not found');
     await this.prisma.discussionLike.deleteMany({
       where: { userId, discussionId },
     });

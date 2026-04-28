@@ -1,5 +1,4 @@
 import {
-  BadRequestException,
   Body,
   Controller,
   Post as HttpPost,
@@ -21,6 +20,7 @@ import {
 } from '@nestjs/swagger';
 import type { Express } from 'express';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
+import { AppError, ErrorCode } from '../common/errors';
 import { CreateReportDto } from './dto/create-report.dto';
 import { ReportsService } from './reports.service';
 
@@ -56,7 +56,13 @@ export class ReportsController {
       fileFilter: (_req, file, cb) => {
         const ok = /^image\/(jpeg|png|gif|webp)$/.test(file.mimetype);
         if (!ok) {
-          cb(new BadRequestException('Solo se permiten imágenes JPEG, PNG, GIF o WebP'), false);
+          cb(
+            AppError.httpBadRequest(
+              ErrorCode.REPORT_IMAGE_TYPE_INVALID,
+              'Solo se permiten imágenes JPEG, PNG, GIF o WebP',
+            ),
+            false,
+          );
           return;
         }
         cb(null, true);

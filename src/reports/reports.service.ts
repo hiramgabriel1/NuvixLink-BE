@@ -1,4 +1,5 @@
-import { BadRequestException, Injectable } from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
+import { AppError, ErrorCode } from '../common/errors';
 import { randomBytes } from 'crypto';
 import type { Express } from 'express';
 import { PrismaService } from '../prisma/prisma.service';
@@ -28,7 +29,10 @@ export class ReportsService {
 
     if (file) {
       if (!ALLOWED_IMAGE_MIME.has(file.mimetype)) {
-        throw new BadRequestException('Tipo de imagen no permitido (usa JPEG, PNG, GIF o WebP)');
+        AppError.badRequest(
+          ErrorCode.REPORT_IMAGE_TYPE_INVALID,
+          'Tipo de imagen no permitido (usa JPEG, PNG, GIF o WebP)',
+        );
       }
       const ext = this.extensionForImage(file.mimetype, file.originalname);
       const objectKey = `${s3ReportsKeyPrefix()}${reporterId}/${Date.now()}-${randomBytes(8).toString('hex')}${ext}`;

@@ -1,13 +1,9 @@
-import {
-  BadRequestException,
-  ConflictException,
-  Injectable,
-  UnauthorizedException,
-} from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { Prisma, User } from '../generated/prisma/client';
 import * as bcrypt from 'bcrypt';
 import { randomBytes } from 'crypto';
+import { AppError, ErrorCode } from '../common/errors';
 import { MailService } from '../mail/mail.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { LoginDto } from './dto/login.dto';
@@ -33,7 +29,7 @@ export class AuthService {
         select: { id: true, isVerified: true },
       });
       if (existingByEmail?.isVerified) {
-        throw new ConflictException('Email already in use');
+        AppError.conflict(ErrorCode.AUTH_EMAIL_IN_USE, 'Email already in use');
       }
 
       const existingByUsername = await tx.user.findUnique({
@@ -41,7 +37,7 @@ export class AuthService {
         select: { id: true, isVerified: true },
       });
       if (existingByUsername?.isVerified) {
-        throw new ConflictException('Username already in use');
+        AppError.conflict(ErrorCode.AUTH_USERNAME_IN_USE, 'Username already in use');
       }
 
 
@@ -54,7 +50,7 @@ export class AuthService {
         });
       }
 
-      // Si ya hay intentos pendientes previos (mismo email o username), los reemplazamos.
+
       await tx.pendingRegistration.deleteMany({
         where: { OR: [{ email }, { username }] },
       });
@@ -94,16 +90,19 @@ export class AuthService {
     });
 
     if (!user) {
-      throw new UnauthorizedException('Invalid credentials');
+      AppError.unauthorized(ErrorCode.AUTH_INVALID_CREDENTIALS, 'Invalid credentials');
     }
 
     const passwordMatches = await bcrypt.compare(dto.password, user.password);
     if (!passwordMatches) {
-      throw new UnauthorizedException('Invalid credentials');
+      AppError.unauthorized(ErrorCode.AUTH_INVALID_CREDENTIALS, 'Invalid credentials');
     }
 
     if (!user.isVerified) {
-      throw new UnauthorizedException('Account not verified. Please verify your email first.');
+      AppError.unauthorized(
+        ErrorCode.AUTH_ACCOUNT_NOT_VERIFIED,
+        'Account not verified. Please verify your email first.',
+      );
     }
 
     return this.buildAuthResponse(user);
@@ -115,14 +114,14 @@ export class AuthService {
     });
 
     if (!pending) {
-      throw new BadRequestException('Invalid verification token');
+      AppError.badRequest(ErrorCode.AUTH_VERIFY_TOKEN_INVALID, 'Invalid verification token');
     }
 
     if (pending.expiresAt.getTime() < Date.now()) {
       await this.prisma.pendingRegistration.delete({
         where: { id: pending.id },
       });
-      throw new BadRequestException('Verification token expired');
+      AppError.badRequest(ErrorCode.AUTH_VERIFY_TOKEN_EXPIRED, 'Verification token expired');
     }
 
     const user = await this.prisma.$transaction(async (tx) => {
@@ -131,14 +130,14 @@ export class AuthService {
         select: { id: true },
       });
       if (existingByEmail) {
-        throw new ConflictException('Email already in use');
+        AppError.conflict(ErrorCode.AUTH_EMAIL_IN_USE, 'Email already in use');
       }
       const existingByUsername = await tx.user.findUnique({
         where: { username: pending.username },
         select: { id: true },
       });
       if (existingByUsername) {
-        throw new ConflictException('Username already in use');
+        AppError.conflict(ErrorCode.AUTH_USERNAME_IN_USE, 'Username already in use');
       }
 
       const created = await tx.user.create({
@@ -178,4 +177,3 @@ export class AuthService {
     };
   }
 }
-

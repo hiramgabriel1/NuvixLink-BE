@@ -1,7 +1,9 @@
 import 'dotenv/config';
+import { BadRequestException, HttpStatus, ValidationPipe } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
-import { ValidationPipe } from '@nestjs/common';
+import { ValidationError } from 'class-validator';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
+import { ErrorCode } from './common/errors';
 import { IoAdapter } from '@nestjs/platform-socket.io';
 import { AppModule } from './app.module';
 import { getCorsOrigins } from './cors-origins';
@@ -21,6 +23,13 @@ async function bootstrap() {
       whitelist: true,
       transform: true,
       forbidNonWhitelisted: true,
+      exceptionFactory: (errors: ValidationError[]) =>
+        new BadRequestException({
+          statusCode: HttpStatus.BAD_REQUEST,
+          code: ErrorCode.VALIDATION_FAILED,
+          message: 'Validation failed',
+          details: errors,
+        }),
     }),
   );
   const swaggerConfig = new DocumentBuilder()

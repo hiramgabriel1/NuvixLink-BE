@@ -1,5 +1,4 @@
 import {
-  BadRequestException,
   Body,
   Controller,
   Delete,
@@ -28,6 +27,7 @@ import {
   ApiTags,
   ApiUnauthorizedResponse,
 } from '@nestjs/swagger';
+import { AppError, ErrorCode } from '../common/errors';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { OptionalJwtAuthGuard } from '../auth/optional-jwt-auth.guard';
 import { UpdateProfileDto } from './dto/update-profile.dto';
@@ -76,7 +76,13 @@ export class UsersController {
       fileFilter: (_req, file, cb) => {
         const ok = /^image\/(jpeg|png|gif|webp)$/.test(file.mimetype);
         if (!ok) {
-          cb(new BadRequestException('Solo se permiten imágenes JPEG, PNG, GIF o WebP'), false);
+          cb(
+            AppError.httpBadRequest(
+              ErrorCode.USER_PROFILE_IMAGE_TYPE_INVALID,
+              'Solo se permiten imágenes JPEG, PNG, GIF o WebP',
+            ),
+            false,
+          );
           return;
         }
         cb(null, true);

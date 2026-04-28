@@ -1,4 +1,5 @@
-import { Injectable, ServiceUnavailableException } from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
+import { AppError, ErrorCode } from '../common/errors';
 import {
   DeleteObjectCommand,
   GetObjectCommand,
@@ -23,7 +24,8 @@ export class S3Service {
   private get bucket() {
     const b = S3Service.resolveBucketName();
     if (!b) {
-      throw new ServiceUnavailableException(
+      AppError.serviceUnavailable(
+        ErrorCode.STORAGE_NOT_CONFIGURED,
         'S3 no esta configurado: define S3_BUCKET (o AWS_S3_BUCKET) y, en general, AWS_REGION y credenciales.',
       );
     }
@@ -110,7 +112,8 @@ export class S3Service {
     }
     const bucket = S3Service.resolveBucketName();
     if (!bucket) {
-      throw new ServiceUnavailableException(
+      AppError.serviceUnavailable(
+        ErrorCode.STORAGE_NOT_CONFIGURED,
         'Define S3_BUCKET (o AWS_S3_BUCKET) y AWS_REGION para armar la URL pública S3 de la foto.',
       );
     }
@@ -184,7 +187,8 @@ export class S3Service {
       const name = (e as { name?: string }).name;
       const message = (e as { message?: string }).message;
       const detail = [name, message].filter(Boolean).join(': ');
-      throw new ServiceUnavailableException(
+      AppError.serviceUnavailable(
+        ErrorCode.STORAGE_PUT_FAILED,
         `Error al subir a S3: ${detail || 'revisa bucket, región, permisos PutObject e IAM'}`,
       );
     }
