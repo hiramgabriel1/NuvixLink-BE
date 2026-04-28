@@ -232,11 +232,12 @@ export class DiscussionsService {
         skip: offset,
         select: {
           id: true,
+          parentId: true,
           body: true,
           createdAt: true,
           updatedAt: true,
           author: { select: { id: true, username: true, photoKey: true } },
-          _count: { select: { likes: true } },
+          _count: { select: { likes: true, replies: true } },
         },
       }),
       this.prisma.discussionComment.count({ where: { discussionId } }),
@@ -261,10 +262,12 @@ export class DiscussionsService {
       offset,
       items: rows.map((row) => ({
         id: row.id,
+        parentId: row.parentId,
         body: row.body,
         createdAt: row.createdAt,
         updatedAt: row.updatedAt,
         author: row.author,
+        repliesCount: row._count.replies,
         likesCount: row._count.likes,
         likedByViewer: viewerUserId ? likedIds.has(row.id) : false,
       })),
@@ -283,20 +286,41 @@ export class DiscussionsService {
     if (!body) {
       AppError.badRequest(ErrorCode.DISCUSSION_COMMENT_EMPTY, 'El comentario no puede estar vacío');
     }
+
+    const rawParentId = dto.parentId?.trim();
+    if (rawParentId) {
+      const parent = await this.prisma.discussionComment.findFirst({
+        where: { id: rawParentId, discussionId },
+        select: { id: true },
+      });
+      if (!parent) {
+        AppError.badRequest(
+          ErrorCode.DISCUSSION_COMMENT_PARENT_INVALID,
+          'El comentario al que respondes no existe o no pertenece a esta discusión',
+        );
+      }
+    }
+
     const comment = await this.prisma.discussionComment.create({
-      data: { discussionId, authorId, body },
+      data: {
+        discussionId,
+        authorId,
+        body,
+        ...(rawParentId ? { parentId: rawParentId } : {}),
+      },
       select: {
         id: true,
+        parentId: true,
         body: true,
         createdAt: true,
         updatedAt: true,
         author: { select: { id: true, username: true, photoKey: true } },
-        _count: { select: { likes: true } },
+        _count: { select: { likes: true, replies: true } },
       },
     });
     const commentsCount = await this.prisma.discussionComment.count({ where: { discussionId } });
     const { _count, ...rest } = comment;
-    const out = { ...rest, likesCount: _count.likes };
+    const out = { ...rest, likesCount: _count.likes, repliesCount: _count.replies };
     this.feedGateway.emitDiscussionCommentCreated({ discussionId, comment: out, commentsCount });
     try {
       await this.notifications.onCommentOnDiscussion({
@@ -358,15 +382,16 @@ export class DiscussionsService {
       data: { body },
       select: {
         id: true,
+        parentId: true,
         body: true,
         createdAt: true,
         updatedAt: true,
         author: { select: { id: true, username: true, photoKey: true } },
-        _count: { select: { likes: true } },
+        _count: { select: { likes: true, replies: true } },
       },
     });
     const { _count: c, ...rest } = comment;
-    const outComment = { ...rest, likesCount: c.likes };
+    const outComment = { ...rest, likesCount: c.likes, repliesCount: c.replies };
     this.feedGateway.emitDiscussionCommentUpdated({ discussionId, comment: outComment });
     return outComment;
   }

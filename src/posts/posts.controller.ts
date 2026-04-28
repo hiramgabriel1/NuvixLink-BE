@@ -267,7 +267,7 @@ export class PostsController {
   @ApiOperation({
     summary: 'List comments on a post (published posts only)',
     description:
-      'Default **5** items per request; use `offset` (and optional `limit`) for more pages. Cada comentario incluye `likesCount`; con Bearer opcional, `likedByViewer`.',
+      'Default **5** items per request; use `offset` (and optional `limit`) for more pages. Lista plana ordenada por antigüedad (`createdAt` asc): `parentId` null = raíz; si no, respuesta a ese comentario en el mismo post. Incluye `repliesCount`, `likesCount` y con Bearer opcional `likedByViewer`.',
   })
   @ApiNotFoundResponse({ description: 'Post not found' })
   @ApiBearerAuth()
@@ -282,7 +282,7 @@ export class PostsController {
     return this.postsService.getCommentsForPost(postId, query, req.user?.userId);
   }
 
-  @ApiOperation({ summary: 'Add a comment to a post' })
+  @ApiOperation({ summary: 'Add a comment to a post', description: 'Opcional `parentId` en el body para responder a otro comentario (mismo post).' })
   @ApiBody({ type: CreateCommentDto })
   @ApiBearerAuth()
   @ApiUnauthorizedResponse({ description: 'Missing or invalid bearer token' })

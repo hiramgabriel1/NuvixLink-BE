@@ -213,17 +213,21 @@ model Comment {
   id        String   @id @default(cuid())
   postId    String
   authorId  String
+  parentId  String?
   body      String
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  post   Post @relation(fields: [postId], references: [id], onDelete: Cascade)
-  author User @relation(fields: [authorId], references: [id], onDelete: Cascade)
-  likes  CommentLike[]
+  post    Post      @relation(fields: [postId], references: [id], onDelete: Cascade)
+  author  User      @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  parent  Comment?  @relation("PostCommentThread", fields: [parentId], references: [id], onDelete: Cascade)
+  replies Comment[] @relation("PostCommentThread")
+  likes   CommentLike[]
   notifications Notification[]
 
   @@index([postId])
   @@index([authorId])
+  @@index([parentId])
 }
 
 model CommentLike {
@@ -273,17 +277,21 @@ model DiscussionComment {
   id             String   @id @default(cuid())
   discussionId   String
   authorId       String
+  parentId       String?
   body           String
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 
   discussion Discussion @relation(fields: [discussionId], references: [id], onDelete: Cascade)
   author     User       @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  parent     DiscussionComment?  @relation("DiscussionCommentThread", fields: [parentId], references: [id], onDelete: Cascade)
+  replies    DiscussionComment[] @relation("DiscussionCommentThread")
   likes      DiscussionCommentLike[]
   notifications Notification[]
 
   @@index([discussionId])
   @@index([authorId])
+  @@index([parentId])
 }
 
 model DiscussionCommentLike {

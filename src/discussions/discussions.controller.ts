@@ -97,7 +97,8 @@ export class DiscussionsController {
 
   @ApiOperation({
     summary: 'Comentarios de una discusión',
-    description: 'Incluye `likesCount`; con Bearer opcional, `likedByViewer` por comentario.',
+    description:
+      'Misma forma que posts: lista plana + `parentId` / `repliesCount`; con Bearer opcional, `likedByViewer`.',
   })
   @ApiNotFoundResponse({ description: 'Discusión no encontrada' })
   @ApiBearerAuth()
@@ -115,7 +116,7 @@ export class DiscussionsController {
     );
   }
 
-  @ApiOperation({ summary: 'Añadir comentario' })
+  @ApiOperation({ summary: 'Añadir comentario', description: 'Opcional `parentId` para respuesta en hilo.' })
   @ApiBody({ type: CreateCommentDto })
   @ApiBearerAuth()
   @ApiUnauthorizedResponse({ description: 'Missing or invalid bearer token' })

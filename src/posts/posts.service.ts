@@ -423,6 +423,7 @@ export class PostsService {
         skip: offset,
         select: {
           id: true,
+          parentId: true,
           body: true,
           createdAt: true,
           updatedAt: true,
@@ -430,7 +431,7 @@ export class PostsService {
             select: { id: true, username: true, photoKey: true },
           },
           _count: {
-            select: { likes: true },
+            select: { likes: true, replies: true },
           },
         },
       }),
@@ -456,10 +457,12 @@ export class PostsService {
       offset,
       items: rows.map((row) => ({
         id: row.id,
+        parentId: row.parentId,
         body: row.body,
         createdAt: row.createdAt,
         updatedAt: row.updatedAt,
         author: row.author,
+        repliesCount: row._count.replies,
         likesCount: row._count.likes,
         likedByViewer: viewerUserId ? likedCommentIds.has(row.id) : false,
       })),
@@ -480,14 +483,30 @@ export class PostsService {
       AppError.badRequest(ErrorCode.POST_COMMENT_EMPTY, 'El comentario no puede estar vacío');
     }
 
+    const rawParentId = dto.parentId?.trim();
+    if (rawParentId) {
+      const parent = await this.prisma.comment.findFirst({
+        where: { id: rawParentId, postId },
+        select: { id: true },
+      });
+      if (!parent) {
+        AppError.badRequest(
+          ErrorCode.POST_COMMENT_PARENT_INVALID,
+          'El comentario al que respondes no existe o no pertenece a este post',
+        );
+      }
+    }
+
     const comment = await this.prisma.comment.create({
       data: {
         postId,
         authorId,
         body,
+        ...(rawParentId ? { parentId: rawParentId } : {}),
       },
       select: {
         id: true,
+        parentId: true,
         body: true,
         createdAt: true,
         updatedAt: true,
@@ -495,13 +514,17 @@ export class PostsService {
           select: { id: true, username: true, photoKey: true },
         },
         _count: {
-          select: { likes: true },
+          select: { likes: true, replies: true },
         },
       },
     });
     const commentsCount = await this.prisma.comment.count({ where: { postId } });
     const { _count, ...commentRest } = comment;
-    const out = { ...commentRest, likesCount: _count.likes };
+    const out = {
+      ...commentRest,
+      likesCount: _count.likes,
+      repliesCount: _count.replies,
+    };
     this.feedGateway.emitCommentCreated({ postId, comment: out, commentsCount });
     void this.notifyPostCommentAndMentions({
       post,
@@ -574,6 +597,7 @@ export class PostsService {
       data: { body },
       select: {
         id: true,
+        parentId: true,
         body: true,
         createdAt: true,
         updatedAt: true,
@@ -581,12 +605,16 @@ export class PostsService {
           select: { id: true, username: true, photoKey: true },
         },
         _count: {
-          select: { likes: true },
+          select: { likes: true, replies: true },
         },
       },
     });
     const { _count: count, ...rest } = comment;
-    const out = { ...rest, likesCount: count.likes };
+    const out = {
+      ...rest,
+      likesCount: count.likes,
+      repliesCount: count.replies,
+    };
     this.feedGateway.emitCommentUpdated({ postId, comment: out });
     return out;
   }
