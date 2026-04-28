@@ -296,4 +296,90 @@ export class NotificationsService {
       discussionId,
     });
   }
+
+  async onLikeOnYourPostComment(args: {
+    commentAuthorId: string;
+    likerId: string;
+    postId: string;
+    commentId: string;
+    previewBody: string;
+  }) {
+    if (args.commentAuthorId === args.likerId) return;
+    const name = await this.actorUsername(args.likerId);
+    await this.create({
+      userId: args.commentAuthorId,
+      actorId: args.likerId,
+      type: 'LIKE_ON_YOUR_POST_COMMENT',
+      title: `A ${name} le gustó tu comentario`,
+      preview: previewText(args.previewBody),
+      postId: args.postId,
+      commentId: args.commentId,
+    });
+  }
+
+  async onReplyToYourPostComment(args: {
+    parentAuthorId: string;
+    replyAuthorId: string;
+    postId: string;
+    postTitle: string;
+    replyCommentId: string;
+    parentCommentId: string;
+    body: string;
+  }) {
+    if (args.parentAuthorId === args.replyAuthorId) return;
+    const name = await this.actorUsername(args.replyAuthorId);
+    await this.create({
+      userId: args.parentAuthorId,
+      actorId: args.replyAuthorId,
+      type: 'REPLY_TO_YOUR_POST_COMMENT',
+      title: `${name} respondió tu comentario`,
+      preview: previewText(args.body),
+      postId: args.postId,
+      commentId: args.replyCommentId,
+      metadata: { postTitle: args.postTitle, parentCommentId: args.parentCommentId },
+    });
+  }
+
+  async onLikeOnYourDiscussionComment(args: {
+    commentAuthorId: string;
+    likerId: string;
+    discussionId: string;
+    commentId: string;
+    previewBody: string;
+  }) {
+    if (args.commentAuthorId === args.likerId) return;
+    const name = await this.actorUsername(args.likerId);
+    await this.create({
+      userId: args.commentAuthorId,
+      actorId: args.likerId,
+      type: 'LIKE_ON_YOUR_DISCUSSION_COMMENT',
+      title: `A ${name} le gustó tu comentario`,
+      preview: previewText(args.previewBody),
+      discussionId: args.discussionId,
+      discussionCommentId: args.commentId,
+    });
+  }
+
+  async onReplyToYourDiscussionComment(args: {
+    parentAuthorId: string;
+    replyAuthorId: string;
+    discussionId: string;
+    discussionTitle: string;
+    replyCommentId: string;
+    parentCommentId: string;
+    body: string;
+  }) {
+    if (args.parentAuthorId === args.replyAuthorId) return;
+    const name = await this.actorUsername(args.replyAuthorId);
+    await this.create({
+      userId: args.parentAuthorId,
+      actorId: args.replyAuthorId,
+      type: 'REPLY_TO_YOUR_DISCUSSION_COMMENT',
+      title: `${name} respondió tu comentario`,
+      preview: previewText(args.body),
+      discussionId: args.discussionId,
+      discussionCommentId: args.replyCommentId,
+      metadata: { discussionTitle: args.discussionTitle, parentCommentId: args.parentCommentId },
+    });
+  }
 }

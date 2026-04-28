@@ -288,10 +288,11 @@ export class DiscussionsService {
     }
 
     const rawParentId = dto.parentId?.trim();
+    let parentCommentAuthorId: string | undefined;
     if (rawParentId) {
       const parent = await this.prisma.discussionComment.findFirst({
         where: { id: rawParentId, discussionId },
-        select: { id: true },
+        select: { id: true, authorId: true },
       });
       if (!parent) {
         AppError.badRequest(
@@ -299,6 +300,7 @@ export class DiscussionsService {
           'El comentario al que respondes no existe o no pertenece a esta discusión',
         );
       }
+      parentCommentAuthorId = parent.authorId;
     }
 
     const comment = await this.prisma.discussionComment.create({
@@ -323,14 +325,6 @@ export class DiscussionsService {
     const out = { ...rest, likesCount: _count.likes, repliesCount: _count.replies };
     this.feedGateway.emitDiscussionCommentCreated({ discussionId, comment: out, commentsCount });
     try {
-      await this.notifications.onCommentOnDiscussion({
-        discussionAuthorId: d.authorId,
-        commentAuthorId: authorId,
-        discussionId,
-        discussionTitle: d.title,
-        commentId: comment.id,
-        body,
-      });
       await this.notifications.onMentionsInDiscussionComment({
         body,
         commentAuthorId: authorId,
@@ -339,6 +333,26 @@ export class DiscussionsService {
         commentId: comment.id,
         discussionAuthorId: d.authorId,
       });
+      if (rawParentId && parentCommentAuthorId !== undefined) {
+        await this.notifications.onReplyToYourDiscussionComment({
+          parentAuthorId: parentCommentAuthorId,
+          replyAuthorId: authorId,
+          discussionId,
+          discussionTitle: d.title,
+          replyCommentId: comment.id,
+          parentCommentId: rawParentId,
+          body,
+        });
+      } else {
+        await this.notifications.onCommentOnDiscussion({
+          discussionAuthorId: d.authorId,
+          commentAuthorId: authorId,
+          discussionId,
+          discussionTitle: d.title,
+          commentId: comment.id,
+          body,
+        });
+      }
     } catch {
       /* vacío */
     }
@@ -409,12 +423,23 @@ export class DiscussionsService {
       where: { id: commentId, discussionId },
       select: {
         id: true,
+        authorId: true,
+        body: true,
         discussion: { select: { isDraft: true } },
       },
     });
     if (!row || row.discussion.isDraft) {
       AppError.notFound(ErrorCode.DISCUSSION_COMMENT_NOT_FOUND, 'Comment not found');
     }
+
+    const already = await this.prisma.discussionCommentLike.findUnique({
+      where: {
+        userId_discussionCommentId: {
+          userId,
+          discussionCommentId: commentId,
+        },
+      },
+    });
 
     await this.prisma.discussionCommentLike.upsert({
       where: {
@@ -432,6 +457,19 @@ export class DiscussionsService {
     const likesCount = await this.prisma.discussionCommentLike.count({
       where: { discussionCommentId: commentId },
     });
+
+    if (!already) {
+      void this.notifications
+        .onLikeOnYourDiscussionComment({
+          commentAuthorId: row.authorId,
+          likerId: userId,
+          discussionId,
+          commentId,
+          previewBody: row.body,
+        })
+        .catch(() => undefined);
+    }
+
     return { liked: true, likesCount };
   }
 

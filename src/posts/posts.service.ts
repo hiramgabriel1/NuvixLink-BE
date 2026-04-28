@@ -484,10 +484,11 @@ export class PostsService {
     }
 
     const rawParentId = dto.parentId?.trim();
+    let parentCommentAuthorId: string | undefined;
     if (rawParentId) {
       const parent = await this.prisma.comment.findFirst({
         where: { id: rawParentId, postId },
-        select: { id: true },
+        select: { id: true, authorId: true },
       });
       if (!parent) {
         AppError.badRequest(
@@ -495,6 +496,7 @@ export class PostsService {
           'El comentario al que respondes no existe o no pertenece a este post',
         );
       }
+      parentCommentAuthorId = parent.authorId;
     }
 
     const comment = await this.prisma.comment.create({
@@ -526,40 +528,56 @@ export class PostsService {
       repliesCount: _count.replies,
     };
     this.feedGateway.emitCommentCreated({ postId, comment: out, commentsCount });
-    void this.notifyPostCommentAndMentions({
+    void this.notifyPostCommentSideEffects({
       post,
       postId,
       authorId,
       body,
-      comment,
+      commentId: comment.id,
+      rawParentId,
+      parentCommentAuthorId,
     });
     return out;
   }
 
-  private async notifyPostCommentAndMentions(args: {
+  private async notifyPostCommentSideEffects(args: {
     post: { authorId: string; title: string };
     postId: string;
     authorId: string;
     body: string;
-    comment: { id: string; body: string };
+    commentId: string;
+    rawParentId: string | undefined;
+    parentCommentAuthorId?: string;
   }) {
     try {
-      await this.notifications.onCommentOnPost({
-        postAuthorId: args.post.authorId,
-        commentAuthorId: args.authorId,
-        postId: args.postId,
-        postTitle: args.post.title,
-        commentId: args.comment.id,
-        body: args.body,
-      });
       await this.notifications.onMentionsInPostComment({
         body: args.body,
         commentAuthorId: args.authorId,
         postId: args.postId,
         postTitle: args.post.title,
-        commentId: args.comment.id,
+        commentId: args.commentId,
         postAuthorId: args.post.authorId,
       });
+      if (args.rawParentId && args.parentCommentAuthorId !== undefined) {
+        await this.notifications.onReplyToYourPostComment({
+          parentAuthorId: args.parentCommentAuthorId,
+          replyAuthorId: args.authorId,
+          postId: args.postId,
+          postTitle: args.post.title,
+          replyCommentId: args.commentId,
+          parentCommentId: args.rawParentId,
+          body: args.body,
+        });
+      } else {
+        await this.notifications.onCommentOnPost({
+          postAuthorId: args.post.authorId,
+          commentAuthorId: args.authorId,
+          postId: args.postId,
+          postTitle: args.post.title,
+          commentId: args.commentId,
+          body: args.body,
+        });
+      }
     } catch {
       // no bloquear comentario si falla notificación
     }
@@ -632,12 +650,23 @@ export class PostsService {
       where: { id: commentId, postId },
       select: {
         id: true,
+        authorId: true,
+        body: true,
         post: { select: { isDraft: true } },
       },
     });
     if (!row || row.post.isDraft) {
       AppError.notFound(ErrorCode.POST_COMMENT_NOT_FOUND, 'Comment not found');
     }
+
+    const already = await this.prisma.commentLike.findUnique({
+      where: {
+        userId_commentId: {
+          userId,
+          commentId,
+        },
+      },
+    });
 
     await this.prisma.commentLike.upsert({
       where: {
@@ -650,6 +679,19 @@ export class PostsService {
       create: { userId, commentId },
     });
     const likesCount = await this.prisma.commentLike.count({ where: { commentId } });
+
+    if (!already) {
+      void this.notifications
+        .onLikeOnYourPostComment({
+          commentAuthorId: row.authorId,
+          likerId: userId,
+          postId,
+          commentId,
+          previewBody: row.body,
+        })
+        .catch(() => undefined);
+    }
+
     return { liked: true, likesCount };
   }
 
