@@ -8,6 +8,7 @@ import { DiscussionsModule } from './discussions/discussions.module';
 import { NotificationsModule } from './notifications/notifications.module';
 import { PostsModule } from './posts/posts.module';
 import { ReportsModule } from './reports/reports.module';
+import { SearchModule } from './search/search.module';
 import { StorageModule } from './storage/storage.module';
 import { UsersModule } from './users/users.module';
 import { AppController } from './app.controller';
@@ -25,6 +26,7 @@ import { AppService } from './app.service';
     ReportsModule,
     UsersModule,
     ChallengesModule,
+    SearchModule,
   ],
   controllers: [AppController],
   providers: [
