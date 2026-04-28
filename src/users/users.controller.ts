@@ -153,7 +153,7 @@ export class UsersController {
   @ApiOperation({
     summary: 'Get trending builders by followers and/or post likes',
     description:
-      'Público. Con **Authorization: Bearer** opcional, cada item incluye **`isFollowedByViewer`** para mostrar estado "Siguiendo" tras recargar.',
+      'Solo aparecen usuarios activos que cumplen al menos uno: más de **10 seguidores** **o** algún **post publicado con más de 10 likes**. Público; con Bearer opcional, **`isFollowedByViewer`**.',
   })
   @ApiBearerAuth()
   @ApiQuery({

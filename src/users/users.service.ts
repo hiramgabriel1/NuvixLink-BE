@@ -11,6 +11,10 @@ import { TrendingBuildersBy, TrendingBuildersQueryDto } from './dto/trending-bui
 
 const ALLOWED_IMAGE_MIME = new Set(['image/jpeg', 'image/png', 'image/gif', 'image/webp']);
 
+/** Elegibilidad: seguidores totales > 10 y/o algún post público con más de 10 likes en ese post. */
+const TRENDING_MIN_FOLLOWERS_EXCLUSIVE = 10;
+const TRENDING_MIN_LIKES_ON_A_POST_EXCLUSIVE = 10;
+
 /** Prefijo bajo el bucket (`S3_USERS_FOLDER`; por defecto `profile-media/`). */
 function s3ProfileMediaKeyPrefix(): string {
   const raw = process.env.S3_USERS_FOLDER?.trim().replace(/^\//, '');
@@ -352,6 +356,13 @@ export class UsersService {
       return acc;
     }, {});
 
+    const maxLikesOnOnePostByAuthor = postLikes.reduce<Record<string, number>>((acc, post) => {
+      const n = post._count.likes;
+      const prev = acc[post.authorId] ?? 0;
+      acc[post.authorId] = Math.max(prev, n);
+      return acc;
+    }, {});
+
     const builders: TrendingBuilder[] = users.map((user) => {
       const followersCount = user._count.followers;
       const likesReceivedCount = likesByAuthor[user.id] ?? 0;
@@ -375,7 +386,14 @@ export class UsersService {
       };
     });
 
-    const trending = builders
+    const eligible = builders.filter((b) => {
+      const followersOk = b.followersCount > TRENDING_MIN_FOLLOWERS_EXCLUSIVE;
+      const anyPostEnoughLikes =
+        (maxLikesOnOnePostByAuthor[b.id] ?? 0) > TRENDING_MIN_LIKES_ON_A_POST_EXCLUSIVE;
+      return followersOk || anyPostEnoughLikes;
+    });
+
+    const trending = eligible
       .sort((a, b) => {
         if (b.score !== a.score) return b.score - a.score;
         if (b.followersCount !== a.followersCount) return b.followersCount - a.followersCount;
@@ -403,7 +421,7 @@ export class UsersService {
     return {
       by,
       limit,
-      totalCandidates: builders.length,
+      totalCandidates: eligible.length,
       items,
     };
   }
