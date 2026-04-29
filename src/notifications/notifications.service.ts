@@ -93,7 +93,7 @@ export class NotificationsService {
   private async actorUsername(userId: string) {
     const u = await this.prisma.user.findUnique({
       where: { id: userId },
-      select: { username: true },
+      select: { username: true, isAdmin: true },
     });
     return u?.username ?? 'usuario';
   }
