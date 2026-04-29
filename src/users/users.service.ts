@@ -158,7 +158,7 @@ export class UsersService {
       },
     });
     if (!hadFollow) {
-      void this.notifications.onNewFollower(target.id, followerId).catch(() => undefined);
+      await this.notifications.onNewFollower(target.id, followerId).catch(() => undefined);
     }
     return { following: true, username: target.username };
   }
@@ -183,6 +183,19 @@ export class UsersService {
     });
     return { following: false, username: target.username };
   }
+
+  /**
+   * this function returns the followers of the user
+   * @param userId the id of the user
+   * @returns 
+   */
+  async getMyFollowers(userId: string) {
+    return await this.prisma.follow.findMany({
+     where: { followingId: userId },
+     select: { follower: { select: { id: true, username: true, photoKey: true, isAdmin: true } } },
+   });
+ }
+
 
   async getProfileByUsername(username: string) {
     const user = await this.prisma.user.findUnique({
