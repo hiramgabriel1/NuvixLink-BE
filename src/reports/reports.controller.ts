@@ -40,9 +40,9 @@ export class ReportsController {
   constructor(private readonly reportsService: ReportsService) {}
 
   @ApiOperation({
-    summary: 'Submit a user report',
+    summary: 'Reportar una publicación o un perfil',
     description:
-      'Acepta **application/json** (campo `image` opcional: clave S3 existente o URL), o **multipart/form-data** con los mismos campos de texto y un archivo opcional en el campo **`image`** (se sube a S3 y se persiste la clave del objeto). Si envias archivo, se ignora el `image` string del body.',
+      'Acepta **application/json** o **multipart/form-data**. Debes enviar **postId** (para reportar una publicación) o **reportedUserId** (para reportar un perfil). El campo `image` es opcional: puedes enviar una clave S3/URL (JSON) o subir un archivo en **`image`** (multipart; se sube a S3 y se persiste la clave). Si envías archivo, se ignora el `image` string del body.',
   })
   @ApiConsumes('application/json', 'multipart/form-data')
   @ApiBearerAuth()

@@ -8,10 +8,10 @@ datasource db {
 }
 
 model User {
-  id          String   @id @default(cuid())
-  email       String   @unique
+  id          String  @id @default(cuid())
+  email       String  @unique
   password    String
-  username    String   @unique
+  username    String  @unique
   position    String?
   description String?
 
@@ -19,30 +19,31 @@ model User {
 
   techStack   String[] @default([])
   socialLinks Json?
-  websiteUrl String?
+  websiteUrl  String?
 
-  isActive Boolean @default(true)
-  isAdmin Boolean @default(false)
+  isActive   Boolean @default(true)
+  isAdmin    Boolean @default(false)
   isVerified Boolean @default(false)
 
-  following Follow[] @relation("UserFollowing")
-  followers Follow[] @relation("UserFollowers")
-  posts                Post[]
-  draftPosts           DraftPost[]
-  discussions        Discussion[]
-  comments              Comment[]
-  discussionComments  DiscussionComment[]
-  commentLikes          CommentLike[]
+  following              Follow[]                @relation("UserFollowing")
+  followers              Follow[]                @relation("UserFollowers")
+  posts                  Post[]
+  draftPosts             DraftPost[]
+  discussions            Discussion[]
+  comments               Comment[]
+  discussionComments     DiscussionComment[]
+  commentLikes           CommentLike[]
   discussionCommentLikes DiscussionCommentLike[]
-  likes                 Like[]
-  discussionLikes       DiscussionLike[]
-  bookmarks            Bookmark[]
-  reports              Report[]
-  notificationsReceived  Notification[] @relation("NotificationRecipient")
-  notificationsAsActor    Notification[] @relation("NotificationActor")
+  likes                  Like[]
+  discussionLikes        DiscussionLike[]
+  bookmarks              Bookmark[]
+  reportsMade            Report[]                @relation("ReportReporter")
+  reportsReceived        Report[]                @relation("ReportReportedUser")
+  notificationsReceived  Notification[]          @relation("NotificationRecipient")
+  notificationsAsActor   Notification[]          @relation("NotificationActor")
 
-  challengesCreated         Challenge[]              @relation("ChallengeCreator")
-  challengeSoloEnrollments  ChallengeSoloEnrollment[]
+  challengesCreated        Challenge[]               @relation("ChallengeCreator")
+  challengeSoloEnrollments ChallengeSoloEnrollment[]
   challengeTeamMemberships ChallengeTeamMember[]
 
   createdAt DateTime @default(now())
@@ -55,7 +56,7 @@ enum ChallengeMode {
 }
 
 model Challenge {
-  id               String         @id @default(cuid())
+  id               String        @id @default(cuid())
   creatorId        String
   title            String
   description      String?
@@ -63,12 +64,12 @@ model Challenge {
   mode             ChallengeMode
   /// Texto del premio; null/ vacío = sin premio
   prizeDescription String?
-  createdAt        DateTime       @default(now())
-  updatedAt        DateTime       @updatedAt
+  createdAt        DateTime      @default(now())
+  updatedAt        DateTime      @updatedAt
 
-  creator          User @relation("ChallengeCreator", fields: [creatorId], references: [id], onDelete: Cascade)
-  soloEnrollments  ChallengeSoloEnrollment[]
-  teams            ChallengeTeam[]
+  creator         User                      @relation("ChallengeCreator", fields: [creatorId], references: [id], onDelete: Cascade)
+  soloEnrollments ChallengeSoloEnrollment[]
+  teams           ChallengeTeam[]
 
   @@index([creatorId])
   @@index([endsAt])
@@ -97,7 +98,7 @@ model ChallengeTeam {
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
-  challenge Challenge              @relation(fields: [challengeId], references: [id], onDelete: Cascade)
+  challenge Challenge             @relation(fields: [challengeId], references: [id], onDelete: Cascade)
   members   ChallengeTeamMember[]
 
   @@index([challengeId])
@@ -110,7 +111,7 @@ model ChallengeTeamMember {
   createdAt DateTime @default(now())
 
   team ChallengeTeam @relation(fields: [teamId], references: [id], onDelete: Cascade)
-  user User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user User          @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([teamId, userId])
   @@index([userId])
@@ -118,18 +119,18 @@ model ChallengeTeamMember {
 }
 
 model PendingRegistration {
-  id        String   @id @default(cuid())
-  email     String   @unique
-  username  String   @unique
-  password  String
-  position  String?
+  id          String   @id @default(cuid())
+  email       String   @unique
+  username    String   @unique
+  password    String
+  position    String?
   description String?
-  techStack String[] @default([])
+  techStack   String[] @default([])
   socialLinks Json?
-  token     String   @unique
-  expiresAt DateTime
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  token       String   @unique
+  expiresAt   DateTime
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 
   @@index([expiresAt])
 }
@@ -158,11 +159,12 @@ model Post {
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
-  author    User       @relation(fields: [authorId], references: [id], onDelete: Cascade)
-  likes     Like[]
-  bookmarks Bookmark[]
-  comments  Comment[]
+  author        User           @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  likes         Like[]
+  bookmarks     Bookmark[]
+  comments      Comment[]
   notifications Notification[]
+  reports       Report[]       @relation("ReportPost")
 
   @@index([authorId])
   @@index([createdAt])
@@ -218,11 +220,11 @@ model Comment {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  post    Post      @relation(fields: [postId], references: [id], onDelete: Cascade)
-  author  User      @relation(fields: [authorId], references: [id], onDelete: Cascade)
-  parent  Comment?  @relation("PostCommentThread", fields: [parentId], references: [id], onDelete: Cascade)
-  replies Comment[] @relation("PostCommentThread")
-  likes   CommentLike[]
+  post          Post           @relation(fields: [postId], references: [id], onDelete: Cascade)
+  author        User           @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  parent        Comment?       @relation("PostCommentThread", fields: [parentId], references: [id], onDelete: Cascade)
+  replies       Comment[]      @relation("PostCommentThread")
+  likes         CommentLike[]
   notifications Notification[]
 
   @@index([postId])
@@ -252,9 +254,9 @@ model Discussion {
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
-  author   User                 @relation(fields: [authorId], references: [id], onDelete: Cascade)
-  likes    DiscussionLike[]
-  comments DiscussionComment[]
+  author        User                @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  likes         DiscussionLike[]
+  comments      DiscussionComment[]
   notifications Notification[]
 
   @@index([authorId])
@@ -262,9 +264,9 @@ model Discussion {
 }
 
 model DiscussionLike {
-  userId         String
-  discussionId   String
-  createdAt      DateTime @default(now())
+  userId       String
+  discussionId String
+  createdAt    DateTime @default(now())
 
   user       User       @relation(fields: [userId], references: [id], onDelete: Cascade)
   discussion Discussion @relation(fields: [discussionId], references: [id], onDelete: Cascade)
@@ -274,19 +276,19 @@ model DiscussionLike {
 }
 
 model DiscussionComment {
-  id             String   @id @default(cuid())
-  discussionId   String
-  authorId       String
-  parentId       String?
-  body           String
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
+  id           String   @id @default(cuid())
+  discussionId String
+  authorId     String
+  parentId     String?
+  body         String
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
 
-  discussion Discussion @relation(fields: [discussionId], references: [id], onDelete: Cascade)
-  author     User       @relation(fields: [authorId], references: [id], onDelete: Cascade)
-  parent     DiscussionComment?  @relation("DiscussionCommentThread", fields: [parentId], references: [id], onDelete: Cascade)
-  replies    DiscussionComment[] @relation("DiscussionCommentThread")
-  likes      DiscussionCommentLike[]
+  discussion    Discussion              @relation(fields: [discussionId], references: [id], onDelete: Cascade)
+  author        User                    @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  parent        DiscussionComment?      @relation("DiscussionCommentThread", fields: [parentId], references: [id], onDelete: Cascade)
+  replies       DiscussionComment[]     @relation("DiscussionCommentThread")
+  likes         DiscussionCommentLike[]
   notifications Notification[]
 
   @@index([discussionId])
@@ -295,11 +297,11 @@ model DiscussionComment {
 }
 
 model DiscussionCommentLike {
-  userId                String
-  discussionCommentId   String
-  createdAt             DateTime @default(now())
+  userId              String
+  discussionCommentId String
+  createdAt           DateTime @default(now())
 
-  user                User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user              User              @relation(fields: [userId], references: [id], onDelete: Cascade)
   discussionComment DiscussionComment @relation(fields: [discussionCommentId], references: [id], onDelete: Cascade)
 
   @@id([userId, discussionCommentId])
@@ -320,35 +322,37 @@ enum NotificationType {
 }
 
 model Notification {
-  id                    String            @id @default(cuid())
-  userId                String
-  actorId               String?
-  type                  NotificationType
-  title                 String
-  preview               String?
-  postId                String?
-  commentId             String?
+  id                  String           @id @default(cuid())
+  userId              String
+  actorId             String?
+  type                NotificationType
+  title               String
+  preview             String?
+  postId              String?
+  commentId           String?
   discussionId        String?
   discussionCommentId String?
-  metadata              Json?
-  read                  Boolean           @default(false)
-  readAt                DateTime?
-  createdAt             DateTime          @default(now())
+  metadata            Json?
+  read                Boolean          @default(false)
+  readAt              DateTime?
+  createdAt           DateTime         @default(now())
 
-  recipient            User  @relation("NotificationRecipient", fields: [userId], references: [id], onDelete: Cascade)
-  actor                User? @relation("NotificationActor", fields: [actorId], references: [id], onDelete: SetNull)
-  post                 Post? @relation(fields: [postId], references: [id], onDelete: Cascade)
-  comment              Comment? @relation(fields: [commentId], references: [id], onDelete: Cascade)
-  discussion           Discussion? @relation(fields: [discussionId], references: [id], onDelete: Cascade)
-  discussionComment    DiscussionComment? @relation(fields: [discussionCommentId], references: [id], onDelete: Cascade)
+  recipient         User               @relation("NotificationRecipient", fields: [userId], references: [id], onDelete: Cascade)
+  actor             User?              @relation("NotificationActor", fields: [actorId], references: [id], onDelete: SetNull)
+  post              Post?              @relation(fields: [postId], references: [id], onDelete: Cascade)
+  comment           Comment?           @relation(fields: [commentId], references: [id], onDelete: Cascade)
+  discussion        Discussion?        @relation(fields: [discussionId], references: [id], onDelete: Cascade)
+  discussionComment DiscussionComment? @relation(fields: [discussionCommentId], references: [id], onDelete: Cascade)
 
   @@index([userId, read, createdAt])
   @@index([userId, createdAt])
 }
 
 model Report {
-  id             String   @id @default(cuid())
+  id             String  @id @default(cuid())
   reporterId     String
+  postId         String?
+  reportedUserId String?
 
   typeReport     String
   title          String
@@ -357,10 +361,14 @@ model Report {
   url            String?
   emailToContact String?
 
-  reporter User @relation(fields: [reporterId], references: [id], onDelete: Cascade)
+  reporter     User  @relation("ReportReporter", fields: [reporterId], references: [id], onDelete: Cascade)
+  post         Post? @relation("ReportPost", fields: [postId], references: [id], onDelete: Cascade)
+  reportedUser User? @relation("ReportReportedUser", fields: [reportedUserId], references: [id], onDelete: Cascade)
 
   createdAt DateTime @default(now())
 
   @@index([reporterId])
+  @@index([postId])
+  @@index([reportedUserId])
   @@index([createdAt])
 }

@@ -25,6 +25,21 @@ export class ReportsService {
   ) {}
 
   async create(reporterId: string, dto: CreateReportDto, file?: Express.Multer.File) {
+    const postId = dto.postId?.trim() || undefined;
+    const reportedUserId = dto.reportedUserId?.trim() || undefined;
+    if (!postId && !reportedUserId) {
+      AppError.badRequest(
+        ErrorCode.REPORT_TARGET_REQUIRED,
+        'Debes enviar postId (publicación) o reportedUserId (perfil)',
+      );
+    }
+    if (postId && reportedUserId) {
+      AppError.badRequest(
+        ErrorCode.REPORT_TARGET_INVALID,
+        'Envía solo uno: postId o reportedUserId',
+      );
+    }
+
     let imageKey: string | undefined = dto.image?.trim() || undefined;
 
     if (file) {
@@ -47,6 +62,8 @@ export class ReportsService {
     return this.prisma.report.create({
       data: {
         reporterId,
+        postId,
+        reportedUserId,
         typeReport: dto.typeReport,
         title: dto.title,
         description: dto.description,

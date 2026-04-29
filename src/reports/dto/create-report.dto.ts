@@ -6,6 +6,26 @@ const emptyToUndefined = ({ value }: { value: unknown }) =>
   value === '' || value === null || value === undefined ? undefined : value;
 
 export class CreateReportDto {
+  @ApiPropertyOptional({
+    example: 'ckx... (cuid)',
+    description: 'ID de la publicación a reportar (alternativa a reportedUserId).',
+  })
+  @Transform(emptyToUndefined)
+  @IsOptional()
+  @IsString()
+  @MaxLength(50)
+  postId?: string;
+
+  @ApiPropertyOptional({
+    example: 'ckx... (cuid)',
+    description: 'ID del usuario (perfil) a reportar (alternativa a postId).',
+  })
+  @Transform(emptyToUndefined)
+  @IsOptional()
+  @IsString()
+  @MaxLength(50)
+  reportedUserId?: string;
+
   @ApiProperty({ example: 'spam' })
   @IsString()
   @MaxLength(50)
