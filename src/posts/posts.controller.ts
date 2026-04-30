@@ -428,6 +428,44 @@ export class PostsController {
     return this.postsService.removeBookmark(req.user.userId, postId);
   }
 
+  @ApiOperation({ summary: 'Hide a post (will not appear in feed)' })
+  @ApiBearerAuth()
+  @ApiUnauthorizedResponse({ description: 'Missing or invalid bearer token' })
+  @ApiNotFoundResponse({ description: 'Post not found' })
+  @ApiOkResponse({
+    description: 'Post hidden successfully',
+    schema: { example: { hidden: true } },
+  })
+  @UseGuards(JwtAuthGuard)
+  @HttpPost(':postId/hide')
+  hidePost(@Req() req: AuthRequest, @Param('postId') postId: string) {
+    return this.postsService.hidePost(req.user.userId, postId);
+  }
+
+  @ApiOperation({ summary: 'Unhide a post (show it again in feed)' })
+  @ApiBearerAuth()
+  @ApiUnauthorizedResponse({ description: 'Missing or invalid bearer token' })
+  @ApiNotFoundResponse({ description: 'Post not found' })
+  @ApiOkResponse({
+    description: 'Post unhidden successfully',
+    schema: { example: { hidden: false } },
+  })
+  @UseGuards(JwtAuthGuard)
+  @Delete(':postId/hide')
+  unhidePost(@Req() req: AuthRequest, @Param('postId') postId: string) {
+    return this.postsService.unhidePost(req.user.userId, postId);
+  }
+
+  @ApiOperation({ summary: 'List my hidden posts' })
+  @ApiBearerAuth()
+  @ApiUnauthorizedResponse({ description: 'Missing or invalid bearer token' })
+  @ApiOkResponse({ description: 'Hidden posts retrieved successfully' })
+  @UseGuards(JwtAuthGuard)
+  @Get('hidden/me')
+  getHiddenPosts(@Req() req: AuthRequest) {
+    return this.postsService.getHiddenPosts(req.user.userId);
+  }
+
   @ApiOperation({
     summary: 'Editar post publicado (solo el autor)',
     description:

@@ -46,6 +46,8 @@ model User {
   challengeSoloEnrollments ChallengeSoloEnrollment[]
   challengeTeamMemberships ChallengeTeamMember[]
 
+  hiddenPosts HiddenPost[]
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 }
@@ -165,6 +167,7 @@ model Post {
   comments      Comment[]
   notifications Notification[]
   reports       Report[]       @relation("ReportPost")
+  hiddenBy      HiddenPost[]
 
   @@index([authorId])
   @@index([createdAt])
@@ -200,6 +203,18 @@ model Like {
 }
 
 model Bookmark {
+  userId    String
+  postId    String
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  post Post @relation(fields: [postId], references: [id], onDelete: Cascade)
+
+  @@id([userId, postId])
+  @@index([postId])
+}
+
+model HiddenPost {
   userId    String
   postId    String
   createdAt DateTime @default(now())

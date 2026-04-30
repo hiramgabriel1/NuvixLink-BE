@@ -286,6 +286,11 @@ export class PostsService {
     const limit = query.limit ?? 20;
     const offset = query.offset ?? 0;
 
+    const hiddenFilter =
+      currentUserId
+        ? { NOT: { hiddenBy: { some: { userId: currentUserId } } } }
+        : {};
+
     if (filter === PostsListFilter.FOLLOWING) {
       if (!currentUserId) {
         AppError.unauthorized(
@@ -302,7 +307,7 @@ export class PostsService {
         return { data: [], limit, offset, filter };
       }
       const rows = await this.prisma.post.findMany({
-        where: { isDraft: false, authorId: { in: authorIds } },
+        where: { isDraft: false, authorId: { in: authorIds }, ...hiddenFilter },
         orderBy: this.feedOrderBy,
         skip: offset,
         take: limit,
@@ -317,7 +322,7 @@ export class PostsService {
     }
 
     const rows = await this.prisma.post.findMany({
-      where: { isDraft: false },
+      where: { isDraft: false, ...hiddenFilter },
       orderBy: this.feedOrderBy,
       skip: offset,
       take: limit,
@@ -405,6 +410,82 @@ export class PostsService {
     });
 
     return { bookmarked: false };
+  }
+
+  async hidePost(userId: string, postId: string) {
+    const post = await this.prisma.post.findUnique({
+      where: { id: postId },
+      select: { id: true, isDraft: true },
+    });
+    if (!post || post.isDraft) AppError.notFound(ErrorCode.POST_NOT_FOUND, 'Post not found');
+
+    await this.prisma.hiddenPost.upsert({
+      where: {
+        userId_postId: {
+          userId,
+          postId,
+        },
+      },
+      update: {},
+      create: {
+        userId,
+        postId,
+      },
+    });
+
+    return { hidden: true };
+  }
+
+  async unhidePost(userId: string, postId: string) {
+    const post = await this.prisma.post.findUnique({
+      where: { id: postId },
+      select: { id: true },
+    });
+    if (!post) AppError.notFound(ErrorCode.POST_NOT_FOUND, 'Post not found');
+
+    await this.prisma.hiddenPost.deleteMany({
+      where: {
+        userId,
+        postId,
+      },
+    });
+
+    return { hidden: false };
+  }
+
+  async getHiddenPosts(userId: string) {
+    return this.prisma.hiddenPost
+      .findMany({
+        where: { userId },
+        orderBy: { createdAt: 'desc' },
+        include: {
+          post: {
+            include: {
+              author: {
+                select: {
+                  id: true,
+                  username: true,
+                  photoKey: true,
+                  isAdmin: true,
+                },
+              },
+              _count: {
+                select: {
+                  likes: true,
+                  bookmarks: true,
+                  comments: true,
+                },
+              },
+            },
+          },
+        },
+      })
+      .then((rows) =>
+        rows.map((h) => ({
+          ...h,
+          post: postWithPublicCounts(h.post),
+        })),
+      );
   }
 
   async getCommentsForPost(postId: string, query: PostCommentsQueryDto, viewerUserId?: string) {
