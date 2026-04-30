@@ -37,25 +37,37 @@ export class NotificationsService {
         ...r,
         actor:
           r.actor && typeof r.actor === 'object'
-            ? ({ ...(r.actor as Record<string, unknown>), isFollowedByViewer: false } as unknown)
+            ? ({
+                ...(r.actor as Record<string, unknown>),
+                isFollowedByViewer: false,
+                isFollowingViewer: false,
+              } as unknown)
             : r.actor,
       }));
     }
 
-    const follows = await this.prisma.follow.findMany({
-      where: { followerId: viewerId, followingId: { in: actorIds } },
-      select: { followingId: true },
-    });
-    const followed = new Set(follows.map((f) => f.followingId));
+    const [viewerFollows, actorFollowsViewer] = await this.prisma.$transaction([
+      this.prisma.follow.findMany({
+        where: { followerId: viewerId, followingId: { in: actorIds } },
+        select: { followingId: true },
+      }),
+      this.prisma.follow.findMany({
+        where: { followerId: { in: actorIds }, followingId: viewerId },
+        select: { followerId: true },
+      }),
+    ]);
+    const followedByViewer = new Set(viewerFollows.map((f) => f.followingId));
+    const followingViewer = new Set(actorFollowsViewer.map((f) => f.followerId));
 
     return rows.map((r) => {
-      const isFollowedByViewer =
-        typeof r.actorId === 'string' && r.actorId.length > 0 ? followed.has(r.actorId) : false;
+      const actorId = typeof r.actorId === 'string' && r.actorId.length > 0 ? r.actorId : null;
+      const isFollowedByViewer = actorId ? followedByViewer.has(actorId) : false;
+      const isFollowingViewer = actorId ? followingViewer.has(actorId) : false;
       return {
         ...r,
         actor:
           r.actor && typeof r.actor === 'object'
-            ? ({ ...(r.actor as Record<string, unknown>), isFollowedByViewer } as unknown)
+            ? ({ ...(r.actor as Record<string, unknown>), isFollowedByViewer, isFollowingViewer } as unknown)
             : r.actor,
       };
     });
