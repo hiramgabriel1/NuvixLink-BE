@@ -25,6 +25,42 @@ export class NotificationsService {
     private readonly feedGateway: FeedGateway,
   ) {}
 
+  private async withActorFollowInfo<T extends { actorId: string | null; actor?: unknown }>(
+    viewerId: string,
+    rows: T[],
+  ) {
+    const actorIds = Array.from(
+      new Set(rows.map((r) => r.actorId).filter((id): id is string => typeof id === 'string' && id.length > 0)),
+    );
+    if (actorIds.length === 0) {
+      return rows.map((r) => ({
+        ...r,
+        actor:
+          r.actor && typeof r.actor === 'object'
+            ? ({ ...(r.actor as Record<string, unknown>), isFollowedByViewer: false } as unknown)
+            : r.actor,
+      }));
+    }
+
+    const follows = await this.prisma.follow.findMany({
+      where: { followerId: viewerId, followingId: { in: actorIds } },
+      select: { followingId: true },
+    });
+    const followed = new Set(follows.map((f) => f.followingId));
+
+    return rows.map((r) => {
+      const isFollowedByViewer =
+        typeof r.actorId === 'string' && r.actorId.length > 0 ? followed.has(r.actorId) : false;
+      return {
+        ...r,
+        actor:
+          r.actor && typeof r.actor === 'object'
+            ? ({ ...(r.actor as Record<string, unknown>), isFollowedByViewer } as unknown)
+            : r.actor,
+      };
+    });
+  }
+
   async list(userId: string, unreadOnly: boolean, limit: number, offset: number) {
     const where: Prisma.NotificationWhereInput = { userId, ...(unreadOnly ? { read: false } : {}) };
     const [rows, total, unreadCount] = await this.prisma.$transaction([
@@ -38,8 +74,9 @@ export class NotificationsService {
       this.prisma.notification.count({ where }),
       this.prisma.notification.count({ where: { userId, read: false } }),
     ]);
+    const enriched = await this.withActorFollowInfo(userId, rows);
     return {
-      data: rows,
+      data: enriched,
       total,
       unreadCount,
       limit,
@@ -69,12 +106,13 @@ export class NotificationsService {
       data: { read: true, readAt: new Date() },
       include: listInclude,
     });
+    const [enriched] = await this.withActorFollowInfo(userId, [updated]);
     const unreadCount = await this.prisma.notification.count({
       where: { userId, read: false },
     });
-    this.feedGateway.emitNotificationUpdated(userId, updated);
+    this.feedGateway.emitNotificationUpdated(userId, enriched);
     this.feedGateway.emitNotificationsUnread(userId, unreadCount);
-    return updated;
+    return enriched;
   }
 
   async markAllAsRead(userId: string) {
@@ -128,10 +166,11 @@ export class NotificationsService {
       },
       include: listInclude,
     });
+    const [enriched] = await this.withActorFollowInfo(data.userId, [row]);
     const unreadCount = await this.prisma.notification.count({
       where: { userId: data.userId, read: false },
     });
-    this.feedGateway.emitNotificationCreated(data.userId, row);
+    this.feedGateway.emitNotificationCreated(data.userId, enriched);
     this.feedGateway.emitNotificationsUnread(data.userId, unreadCount);
   }
 
