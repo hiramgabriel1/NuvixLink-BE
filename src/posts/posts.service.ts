@@ -289,11 +289,6 @@ export class PostsService {
     const limit = query.limit ?? 20;
     const offset = query.offset ?? 0;
 
-    const hiddenFilter =
-      currentUserId
-        ? `AND NOT EXISTS (SELECT 1 FROM "HiddenPost" hp WHERE hp."postId" = p.id AND hp."userId" = '${currentUserId}')`
-        : '';
-
     const rows = await this.prisma.$queryRaw<Array<{
       id: string;
       title: string;
@@ -323,10 +318,14 @@ export class PostsService {
       FROM "Post" p
       JOIN "User" u ON u.id = p."authorId"
       WHERE p."isDraft" = false
-        AND EXISTS (
-          SELECT 1 FROM unnest(p."tags") as tag WHERE LOWER(tag) = ${normalizedTag}
+        AND EXISTS (SELECT 1 FROM unnest(p."tags") as t WHERE LOWER(t) = ${normalizedTag})
+        AND (
+          ${currentUserId}::text IS NULL
+          OR NOT EXISTS (
+            SELECT 1 FROM "HiddenPost" hp
+            WHERE hp."postId" = p.id AND hp."userId" = ${currentUserId}
+          )
         )
-        ${hiddenFilter}
       ORDER BY p."createdAt" DESC, p.id DESC
       LIMIT ${limit} OFFSET ${offset}
     `;
