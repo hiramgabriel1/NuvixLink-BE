@@ -31,15 +31,16 @@ import { AppError, ErrorCode } from '../common/errors';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { OptionalJwtAuthGuard } from '../auth/optional-jwt-auth.guard';
 import { CreateCommentDto } from './dto/create-comment.dto';
+import { UpdateCommentDto } from './dto/update-comment.dto';
 import { CreateDraftPostDto } from './dto/create-draft-post.dto';
 import { CreatePostDto } from './dto/create-post.dto';
 import { DraftPostsListQueryDto } from './dto/draft-posts-list-query.dto';
-import { UpdateCommentDto } from './dto/update-comment.dto';
-import { UpdateDraftPostDto } from './dto/update-draft-post.dto';
-import { UpdatePostDto } from './dto/update-post.dto';
 import { PostCommentsQueryDto } from './dto/post-comments-query.dto';
 import { PostLikesQueryDto } from './dto/post-likes-query.dto';
-import { PostsListQueryDto } from './dto/posts-list-query.dto';
+import { PostsListFilter, PostsListQueryDto } from './dto/posts-list-query.dto';
+import { TagSearchQueryDto } from './dto/tag-search-query.dto';
+import { UpdateDraftPostDto } from './dto/update-draft-post.dto';
+import { UpdatePostDto } from './dto/update-post.dto';
 import { PostsService } from './posts.service';
 
 const MAX_POST_IMAGES = 20;
@@ -131,6 +132,26 @@ export class PostsController {
   @Get('bookmarks/me')
   findMyBookmarks(@Req() req: AuthRequest) {
     return this.postsService.findMyBookmarks(req.user.userId);
+  }
+
+  @ApiOperation({
+    summary: 'Buscar posts por tag',
+    description: 'Busca posts que contengan el tag especificado (case-insensitive). Paginado por limit/offset.',
+  })
+  @ApiQuery({ name: 'limit', required: false, type: Number, example: 20 })
+  @ApiQuery({ name: 'offset', required: false, type: Number, example: 0 })
+  @ApiBearerAuth()
+  @ApiOkResponse({
+    description: 'Lista paginada de posts con el tag especificado',
+  })
+  @UseGuards(OptionalJwtAuthGuard)
+  @Get('tag/:tagname')
+  findPostsByTag(
+    @Param('tagname') tagname: string,
+    @Query() query: TagSearchQueryDto,
+    @Req() req: Request & { user?: AuthRequest['user'] },
+  ) {
+    return this.postsService.findPostsByTag(tagname, query, req.user?.userId);
   }
 
   @ApiOperation({

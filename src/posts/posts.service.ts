@@ -15,6 +15,7 @@ import { DraftPostsListQueryDto } from './dto/draft-posts-list-query.dto';
 import { PostCommentsQueryDto } from './dto/post-comments-query.dto';
 import { PostLikesQueryDto } from './dto/post-likes-query.dto';
 import { PostsListFilter, PostsListQueryDto } from './dto/posts-list-query.dto';
+import { TagSearchQueryDto } from './dto/tag-search-query.dto';
 import { UpdateDraftPostDto } from './dto/update-draft-post.dto';
 import { UpdatePostDto } from './dto/update-post.dto';
 
@@ -279,6 +280,38 @@ export class PostsService {
 
     this.feedGateway.emitPostCreated(post);
     return post;
+  }
+
+  async findPostsByTag(tag: string, query: TagSearchQueryDto, currentUserId?: string) {
+    const normalizedTag = tag.toLowerCase();
+    const limit = query.limit ?? 20;
+    const offset = query.offset ?? 0;
+
+    const hiddenFilter =
+      currentUserId
+        ? { NOT: { hiddenBy: { some: { userId: currentUserId } } } }
+        : {};
+
+    const rows = await this.prisma.post.findMany({
+      where: {
+        isDraft: false,
+        tags: {
+          has: normalizedTag,
+        },
+        ...hiddenFilter,
+      },
+      orderBy: this.feedOrderBy,
+      skip: offset,
+      take: limit,
+      include: this.postListInclude,
+    });
+
+    return {
+      data: rows.map(postWithPublicCounts),
+      tag: normalizedTag,
+      limit,
+      offset,
+    };
   }
 
   async findAll(query: PostsListQueryDto, currentUserId?: string) {
