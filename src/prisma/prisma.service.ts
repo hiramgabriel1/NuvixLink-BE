@@ -1,5 +1,6 @@
 import { Injectable, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
 import { PrismaPg } from '@prisma/adapter-pg';
+import { Pool } from 'pg';
 import { AppError, ErrorCode } from '../common/errors';
 import { PrismaClient } from '../generated/prisma/client';
 
@@ -10,8 +11,9 @@ export class PrismaService extends PrismaClient implements OnModuleInit, OnModul
     if (!connectionString) {
       AppError.internal(ErrorCode.CONFIG_DATABASE_URL_MISSING, 'DATABASE_URL is not set');
     }
+    const pool = new Pool({ connectionString });
     super({
-      adapter: new PrismaPg({ connectionString }),
+      adapter: new PrismaPg(pool),
     });
   }
 
