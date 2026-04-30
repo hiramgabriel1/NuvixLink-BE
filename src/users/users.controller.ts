@@ -224,12 +224,19 @@ export class UsersController {
     return this.usersService.getMyFollowing(req.user.userId);
   }
 
-  @ApiOperation({ summary: 'Get a public profile by username' })
-  @ApiOkResponse({ description: 'Profile retrieved successfully' })
+  @ApiOperation({
+    summary: 'Perfil por username',
+    description:
+      'Requiere **Bearer**. Incluye **`isFollowedByViewer`**: si el usuario autenticado sigue a ese perfil (false si es tu propio perfil).',
+  })
+  @ApiBearerAuth()
+  @ApiUnauthorizedResponse({ description: 'Missing or invalid bearer token' })
+  @ApiOkResponse({ description: 'Perfil con isFollowedByViewer' })
   @ApiNotFoundResponse({ description: 'User not found' })
+  @UseGuards(JwtAuthGuard)
   @Get(':username')
-  getByUsername(@Param('username') username: string) {
-    return this.usersService.getProfileByUsername(username);
+  getByUsername(@Param('username') username: string, @Req() req: AuthRequest) {
+    return this.usersService.getProfileByUsername(username, req.user.userId);
   }
 }
 
