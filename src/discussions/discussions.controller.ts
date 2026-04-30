@@ -215,6 +215,44 @@ export class DiscussionsController {
     return this.discussionsService.unlikeDiscussion(req.user.userId, discussionId);
   }
 
+  @ApiOperation({ summary: 'Ocultar discusión (no aparecerá en feed)' })
+  @ApiBearerAuth()
+  @ApiUnauthorizedResponse({ description: 'Missing or invalid bearer token' })
+  @ApiNotFoundResponse({ description: 'Discussion not found' })
+  @ApiOkResponse({
+    description: 'Discussion hidden successfully',
+    schema: { example: { hidden: true } },
+  })
+  @UseGuards(JwtAuthGuard)
+  @HttpPost(':discussionId/hide')
+  hideDiscussion(@Req() req: AuthRequest, @Param('discussionId') discussionId: string) {
+    return this.discussionsService.hideDiscussion(req.user.userId, discussionId);
+  }
+
+  @ApiOperation({ summary: 'Mostrar discusión (quitar de ocultos)' })
+  @ApiBearerAuth()
+  @ApiUnauthorizedResponse({ description: 'Missing or invalid bearer token' })
+  @ApiNotFoundResponse({ description: 'Discussion not found' })
+  @ApiOkResponse({
+    description: 'Discussion unhidden successfully',
+    schema: { example: { hidden: false } },
+  })
+  @UseGuards(JwtAuthGuard)
+  @Delete(':discussionId/hide')
+  unhideDiscussion(@Req() req: AuthRequest, @Param('discussionId') discussionId: string) {
+    return this.discussionsService.unhideDiscussion(req.user.userId, discussionId);
+  }
+
+  @ApiOperation({ summary: 'Listar mis discusiones ocultas' })
+  @ApiBearerAuth()
+  @ApiUnauthorizedResponse({ description: 'Missing or invalid bearer token' })
+  @ApiOkResponse({ description: 'Hidden discussions retrieved successfully' })
+  @UseGuards(JwtAuthGuard)
+  @Get('hidden/me')
+  getHiddenDiscussions(@Req() req: AuthRequest) {
+    return this.discussionsService.getHiddenDiscussions(req.user.userId);
+  }
+
   @ApiOperation({ summary: 'Editar discusión (solo autor)' })
   @ApiBody({ type: UpdateDiscussionDto })
   @ApiBearerAuth()

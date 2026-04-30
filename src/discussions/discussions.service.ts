@@ -68,6 +68,11 @@ export class DiscussionsService {
     const limit = query.limit ?? 20;
     const offset = query.offset ?? 0;
 
+    const hiddenFilter =
+      currentUserId
+        ? { NOT: { hiddenBy: { some: { userId: currentUserId } } } }
+        : {};
+
     if (filter === DiscussionsListFilter.FOLLOWING) {
       if (!currentUserId) {
         AppError.unauthorized(
@@ -84,7 +89,7 @@ export class DiscussionsService {
         return { data: [], limit, offset, filter };
       }
       const rows = await this.prisma.discussion.findMany({
-        where: { isDraft: false, authorId: { in: authorIds } },
+        where: { isDraft: false, authorId: { in: authorIds }, ...hiddenFilter },
         orderBy: this.orderBy,
         skip: offset,
         take: limit,
@@ -99,7 +104,7 @@ export class DiscussionsService {
     }
 
     const rows = await this.prisma.discussion.findMany({
-      where: { isDraft: false },
+      where: { isDraft: false, ...hiddenFilter },
       orderBy: this.orderBy,
       skip: offset,
       take: limit,
@@ -111,6 +116,76 @@ export class DiscussionsService {
       offset,
       filter,
     };
+  }
+
+  async hideDiscussion(userId: string, discussionId: string) {
+    const discussion = await this.prisma.discussion.findUnique({
+      where: { id: discussionId },
+      select: { id: true, isDraft: true },
+    });
+    if (!discussion || discussion.isDraft) AppError.notFound(ErrorCode.DISCUSSION_NOT_FOUND, 'Discussion not found');
+
+    await this.prisma.hiddenDiscussion.upsert({
+      where: {
+        userId_discussionId: {
+          userId,
+          discussionId,
+        },
+      },
+      update: {},
+      create: {
+        userId,
+        discussionId,
+      },
+    });
+
+    return { hidden: true };
+  }
+
+  async unhideDiscussion(userId: string, discussionId: string) {
+    const discussion = await this.prisma.discussion.findUnique({
+      where: { id: discussionId },
+      select: { id: true },
+    });
+    if (!discussion) AppError.notFound(ErrorCode.DISCUSSION_NOT_FOUND, 'Discussion not found');
+
+    await this.prisma.hiddenDiscussion.deleteMany({
+      where: {
+        userId,
+        discussionId,
+      },
+    });
+
+    return { hidden: false };
+  }
+
+  async getHiddenDiscussions(userId: string) {
+    return this.prisma.hiddenDiscussion
+      .findMany({
+        where: { userId },
+        orderBy: { createdAt: 'desc' },
+        include: {
+          discussion: {
+            include: {
+              author: {
+                select: { id: true, username: true, photoKey: true },
+              },
+              _count: {
+                select: {
+                  likes: true,
+                  comments: true,
+                },
+              },
+            },
+          },
+        },
+      })
+      .then((rows) =>
+        rows.map((h) => ({
+          ...h,
+          discussion: discussionWithPublicCounts(h.discussion),
+        })),
+      );
   }
 
   async findOne(id: string) {

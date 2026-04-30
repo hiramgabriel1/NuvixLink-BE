@@ -47,6 +47,7 @@ model User {
   challengeTeamMemberships ChallengeTeamMember[]
 
   hiddenPosts HiddenPost[]
+  hiddenDiscussions HiddenDiscussion[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -273,6 +274,7 @@ model Discussion {
   likes         DiscussionLike[]
   comments      DiscussionComment[]
   notifications Notification[]
+  hiddenBy      HiddenDiscussion[]
 
   @@index([authorId])
   @@index([createdAt])
@@ -386,4 +388,16 @@ model Report {
   @@index([postId])
   @@index([reportedUserId])
   @@index([createdAt])
+}
+
+model HiddenDiscussion {
+  userId       String
+  discussionId String
+  createdAt    DateTime @default(now())
+
+  user       User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  discussion Discussion @relation(fields: [discussionId], references: [id], onDelete: Cascade)
+
+  @@id([userId, discussionId])
+  @@index([discussionId])
 }
