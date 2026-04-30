@@ -79,6 +79,7 @@ export class PostsService {
     const fromUploads = await this.uploadPostImages(authorId, files);
     const media = [...(dto.media ?? []), ...fromUploads];
     const isDraft = dto.isDraft ?? false;
+    const tags = (dto.tags ?? []).map((tag) => tag.toLowerCase());
     const post = await this.prisma.post
       .create({
         data: {
@@ -87,7 +88,7 @@ export class PostsService {
           description: dto.description,
           media,
           website: dto.website,
-          tags: dto.tags ?? [],
+          tags,
           isDraft,
         },
         include: {
@@ -174,6 +175,7 @@ export class PostsService {
     const fromUploads = await this.uploadPostImages(authorId, files);
     const media = [...(dto.media ?? []), ...fromUploads];
     const title = dto.title?.trim() ?? '';
+    const tags = (dto.tags ?? []).map((tag) => tag.toLowerCase());
     return this.prisma.draftPost.create({
       data: {
         authorId,
@@ -181,7 +183,7 @@ export class PostsService {
         description: dto.description,
         media,
         website: dto.website,
-        tags: dto.tags ?? [],
+        tags,
       },
     });
   }
@@ -219,7 +221,7 @@ export class PostsService {
         ...(dto.title !== undefined ? { title: dto.title.trim() } : {}),
         ...(dto.description !== undefined ? { description: dto.description } : {}),
         ...(dto.website !== undefined ? { website: dto.website } : {}),
-        ...(dto.tags !== undefined ? { tags: dto.tags } : {}),
+        ...(dto.tags !== undefined ? { tags: dto.tags.map((tag) => tag.toLowerCase()) } : {}),
         ...(newMedia !== undefined ? { media: newMedia } : {}),
       },
     });
@@ -289,25 +291,67 @@ export class PostsService {
 
     const hiddenFilter =
       currentUserId
-        ? { NOT: { hiddenBy: { some: { userId: currentUserId } } } }
-        : {};
+        ? `AND NOT EXISTS (SELECT 1 FROM "HiddenPost" hp WHERE hp."postId" = p.id AND hp."userId" = '${currentUserId}')`
+        : '';
 
-    const rows = await this.prisma.post.findMany({
-      where: {
-        isDraft: false,
-        tags: {
-          has: normalizedTag,
-        },
-        ...hiddenFilter,
-      },
-      orderBy: this.feedOrderBy,
-      skip: offset,
-      take: limit,
-      include: this.postListInclude,
-    });
+    const rows = await this.prisma.$queryRaw<Array<{
+      id: string;
+      title: string;
+      description: string | null;
+      media: string[];
+      website: string | null;
+      tags: string[];
+      isDraft: boolean;
+      createdAt: Date;
+      updatedAt: Date;
+      authorId: string;
+      username: string;
+      photoKey: string | null;
+      isAdmin: boolean;
+      likesCount: bigint;
+      bookmarksCount: bigint;
+      commentsCount: bigint;
+    }>>`
+      SELECT
+        p.*,
+        u."username",
+        u."photoKey",
+        u."isAdmin",
+        (SELECT COUNT(*) FROM "Like" l WHERE l."postId" = p.id) as "likesCount",
+        (SELECT COUNT(*) FROM "Bookmark" b WHERE b."postId" = p.id) as "bookmarksCount",
+        (SELECT COUNT(*) FROM "Comment" c WHERE c."postId" = p.id) as "commentsCount"
+      FROM "Post" p
+      JOIN "User" u ON u.id = p."authorId"
+      WHERE p."isDraft" = false
+        AND EXISTS (
+          SELECT 1 FROM unnest(p."tags") as tag WHERE LOWER(tag) = ${normalizedTag}
+        )
+        ${hiddenFilter}
+      ORDER BY p."createdAt" DESC, p.id DESC
+      LIMIT ${limit} OFFSET ${offset}
+    `;
 
     return {
-      data: rows.map(postWithPublicCounts),
+      data: rows.map((row) => ({
+        id: row.id,
+        title: row.title,
+        description: row.description,
+        media: row.media,
+        website: row.website,
+        tags: row.tags,
+        isDraft: row.isDraft,
+        createdAt: row.createdAt,
+        updatedAt: row.updatedAt,
+        author: {
+          id: row.authorId,
+          username: row.username,
+          photoKey: row.photoKey,
+          isAdmin: row.isAdmin,
+        },
+        likesCount: Number(row.likesCount),
+        bookmarksCount: Number(row.bookmarksCount),
+        commentsCount: Number(row.commentsCount),
+      })),
       tag: normalizedTag,
       limit,
       offset,
@@ -1000,7 +1044,7 @@ export class PostsService {
     if (dto.title !== undefined) data.title = nextTitle;
     if (dto.description !== undefined) data.description = dto.description;
     if (dto.website !== undefined) data.website = dto.website;
-    if (dto.tags !== undefined) data.tags = dto.tags;
+    if (dto.tags !== undefined) data.tags = dto.tags.map((tag) => tag.toLowerCase());
     if (newMedia !== undefined) data.media = newMedia;
 
     if (Object.keys(data).length === 0) {
