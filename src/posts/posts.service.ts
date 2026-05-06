@@ -42,6 +42,28 @@ function postWithPublicCounts<
   };
 }
 
+/**
+ * Igual que postWithPublicCounts pero añade `likedByViewer` y `bookmarkedByViewer`
+ * cuando el include del feed incluye los arrays filtrados por viewer.
+ */
+function postWithViewerFields<
+  T extends {
+    _count: { likes: number; bookmarks: number; comments: number };
+    likes?: { userId: string }[];
+    bookmarks?: { userId: string }[];
+  },
+>(post: T) {
+  const { _count, likes, bookmarks, ...rest } = post;
+  return {
+    ...rest,
+    likesCount: _count.likes,
+    bookmarksCount: _count.bookmarks,
+    commentsCount: _count.comments,
+    likedByViewer: likes !== undefined ? likes.length > 0 : null,
+    bookmarkedByViewer: bookmarks !== undefined ? bookmarks.length > 0 : null,
+  };
+}
+
 @Injectable()
 export class PostsService {
   constructor(
@@ -130,23 +152,34 @@ export class PostsService {
     return fromName?.[1] ?? '.bin';
   }
 
-  private readonly postListInclude = {
-    author: {
-      select: {
-        id: true,
-        username: true,
-        photoKey: true,
-        isAdmin: true,
-      } as const,
-    },
-    _count: {
-      select: {
-        likes: true,
-        bookmarks: true,
-        comments: true,
-      } as const,
-    },
-  };
+  /** Construye el `include` del feed. Si se pasa `currentUserId` añade
+   * los arrays de likes/bookmarks filtrados para derivar `likedByViewer`
+   * y `bookmarkedByViewer` sin queries extra. */
+  private buildPostListInclude(currentUserId?: string) {
+    return {
+      author: {
+        select: {
+          id: true,
+          username: true,
+          photoKey: true,
+          isAdmin: true,
+        } as const,
+      },
+      _count: {
+        select: {
+          likes: true,
+          bookmarks: true,
+          comments: true,
+        } as const,
+      },
+      ...(currentUserId
+        ? {
+            likes: { where: { userId: currentUserId }, select: { userId: true } },
+            bookmarks: { where: { userId: currentUserId }, select: { userId: true } },
+          }
+        : {}),
+    };
+  }
 
   /** Orden estable: recientes primero; `id` desempata para que offset no “bailen” filas con el mismo `createdAt`. */
   private readonly feedOrderBy = [{ createdAt: 'desc' as const }, { id: 'desc' as const }];
@@ -399,10 +432,10 @@ export class PostsService {
         orderBy: this.feedOrderBy,
         skip: offset,
         take: limit,
-        include: this.postListInclude,
+        include: this.buildPostListInclude(currentUserId),
       });
       return {
-        data: rows.map(postWithPublicCounts),
+        data: rows.map(postWithViewerFields),
         limit,
         offset,
         filter,
@@ -414,10 +447,10 @@ export class PostsService {
       orderBy: this.feedOrderBy,
       skip: offset,
       take: limit,
-      include: this.postListInclude,
+      include: this.buildPostListInclude(currentUserId),
     });
     return {
-      data: rows.map(postWithPublicCounts),
+      data: rows.map(postWithViewerFields),
       limit,
       offset,
       filter,
