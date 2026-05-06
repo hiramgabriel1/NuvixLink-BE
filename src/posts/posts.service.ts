@@ -30,9 +30,9 @@ function s3PostMediaKeyPrefix(): string {
 }
 
 /** Convierte `_count` de Prisma en campos explícitos por post (likes, bookmarks, comentarios). */
-function postWithPublicCounts<T extends { _count: { likes: number; bookmarks: number; comments: number } }>(
-  post: T,
-) {
+function postWithPublicCounts<
+  T extends { _count: { likes: number; bookmarks: number; comments: number } },
+>(post: T) {
   const { _count, ...rest } = post;
   return {
     ...rest,
@@ -51,7 +51,10 @@ export class PostsService {
     private readonly notifications: NotificationsService,
   ) {}
 
-  private async uploadPostImages(authorId: string, files?: Express.Multer.File[]): Promise<string[]> {
+  private async uploadPostImages(
+    authorId: string,
+    files?: Express.Multer.File[],
+  ): Promise<string[]> {
     const fromUploads: string[] = [];
     if (files?.length) {
       for (const file of files) {
@@ -146,15 +149,9 @@ export class PostsService {
   };
 
   /** Orden estable: recientes primero; `id` desempata para que offset no “bailen” filas con el mismo `createdAt`. */
-  private readonly feedOrderBy = [
-    { createdAt: 'desc' as const },
-    { id: 'desc' as const },
-  ];
+  private readonly feedOrderBy = [{ createdAt: 'desc' as const }, { id: 'desc' as const }];
 
-  private readonly draftOrderBy = [
-    { updatedAt: 'desc' as const },
-    { id: 'desc' as const },
-  ];
+  private readonly draftOrderBy = [{ updatedAt: 'desc' as const }, { id: 'desc' as const }];
 
   async listMyDrafts(authorId: string, query: DraftPostsListQueryDto) {
     const limit = query.limit ?? 20;
@@ -289,36 +286,50 @@ export class PostsService {
     const limit = query.limit ?? 20;
     const offset = query.offset ?? 0;
 
-    const rows = await this.prisma.$queryRaw<Array<{
-      id: string;
-      title: string;
-      description: string | null;
-      media: string[];
-      website: string | null;
-      tags: string[];
-      isDraft: boolean;
-      createdAt: Date;
-      updatedAt: Date;
-      authorId: string;
-      username: string;
-      photoKey: string | null;
-      isAdmin: boolean;
-      likesCount: bigint;
-      bookmarksCount: bigint;
-      commentsCount: bigint;
-    }>>`
+    const rows = await this.prisma.$queryRaw<
+      Array<{
+        id: string;
+        title: string;
+        description: string | null;
+        media: string[];
+        website: string | null;
+        tags: string[];
+        isDraft: boolean;
+        createdAt: Date;
+        updatedAt: Date;
+        authorId: string;
+        username: string;
+        photoKey: string | null;
+        isAdmin: boolean;
+        likesCount: bigint;
+        bookmarksCount: bigint;
+        commentsCount: bigint;
+      }>
+    >`
       SELECT
-        p.*,
+        p.id,
+        p.title,
+        p.description,
+        p.media,
+        p.website,
+        p.tags,
+        p."isDraft",
+        p."createdAt",
+        p."updatedAt",
+        p."authorId",
         u."username",
         u."photoKey",
         u."isAdmin",
-        (SELECT COUNT(*) FROM "Like" l WHERE l."postId" = p.id) as "likesCount",
-        (SELECT COUNT(*) FROM "Bookmark" b WHERE b."postId" = p.id) as "bookmarksCount",
-        (SELECT COUNT(*) FROM "Comment" c WHERE c."postId" = p.id) as "commentsCount"
+        COUNT(DISTINCT l."userId")  AS "likesCount",
+        COUNT(DISTINCT bk."userId") AS "bookmarksCount",
+        COUNT(DISTINCT c.id)        AS "commentsCount"
       FROM "Post" p
       JOIN "User" u ON u.id = p."authorId"
+      LEFT JOIN "Like"     l  ON l."postId"  = p.id
+      LEFT JOIN "Bookmark" bk ON bk."postId" = p.id
+      LEFT JOIN "Comment"  c  ON c."postId"  = p.id
       WHERE p."isDraft" = false
-        AND EXISTS (SELECT 1 FROM unnest(p."tags") as t WHERE LOWER(t) = ${normalizedTag})
+        AND EXISTS (SELECT 1 FROM unnest(p."tags") AS t WHERE LOWER(t) = ${normalizedTag})
         AND (
           ${currentUserId}::text IS NULL
           OR NOT EXISTS (
@@ -326,6 +337,7 @@ export class PostsService {
             WHERE hp."postId" = p.id AND hp."userId" = ${currentUserId}
           )
         )
+      GROUP BY p.id, u."username", u."photoKey", u."isAdmin"
       ORDER BY p."createdAt" DESC, p.id DESC
       LIMIT ${limit} OFFSET ${offset}
     `;
@@ -362,10 +374,9 @@ export class PostsService {
     const limit = query.limit ?? 20;
     const offset = query.offset ?? 0;
 
-    const hiddenFilter =
-      currentUserId
-        ? { NOT: { hiddenBy: { some: { userId: currentUserId } } } }
-        : {};
+    const hiddenFilter = currentUserId
+      ? { NOT: { hiddenBy: { some: { userId: currentUserId } } } }
+      : {};
 
     if (filter === PostsListFilter.FOLLOWING) {
       if (!currentUserId) {
@@ -374,16 +385,17 @@ export class PostsService {
           'Para ?filter=following debes enviar Authorization: Bearer <token>',
         );
       }
-      const following = await this.prisma.follow.findMany({
-        where: { followerId: currentUserId },
-        select: { followingId: true },
-      });
-      const authorIds = following.map((f) => f.followingId);
-      if (authorIds.length === 0) {
-        return { data: [], limit, offset, filter };
-      }
+      // Un solo query: Prisma genera EXISTS en lugar de IN (ids) — sin round-trip extra
       const rows = await this.prisma.post.findMany({
-        where: { isDraft: false, authorId: { in: authorIds }, ...hiddenFilter },
+        where: {
+          isDraft: false,
+          author: {
+            followers: {
+              some: { followerId: currentUserId },
+            },
+          },
+          ...hiddenFilter,
+        },
         orderBy: this.feedOrderBy,
         skip: offset,
         take: limit,
@@ -742,11 +754,7 @@ export class PostsService {
     }
   }
 
-  private async getCommentForOwnerOrThrow(
-    userId: string,
-    postId: string,
-    commentId: string,
-  ) {
+  private async getCommentForOwnerOrThrow(userId: string, postId: string, commentId: string) {
     const found = await this.prisma.comment.findUnique({
       where: { id: commentId },
       select: { id: true, postId: true, authorId: true },
@@ -1006,7 +1014,12 @@ export class PostsService {
     return postWithPublicCounts(post);
   }
 
-  async updatePost(authorId: string, postId: string, dto: UpdatePostDto, files?: Express.Multer.File[]) {
+  async updatePost(
+    authorId: string,
+    postId: string,
+    dto: UpdatePostDto,
+    files?: Express.Multer.File[],
+  ) {
     const existing = await this.prisma.post.findUnique({
       where: { id: postId },
       select: {
@@ -1083,7 +1096,10 @@ export class PostsService {
     });
     if (!post) AppError.notFound(ErrorCode.POST_NOT_FOUND, 'Post not found');
     if (post.authorId !== authorId) {
-      AppError.forbidden(ErrorCode.POST_FORBIDDEN_AUTHOR, 'Solo el autor del post puede eliminarlo');
+      AppError.forbidden(
+        ErrorCode.POST_FORBIDDEN_AUTHOR,
+        'Solo el autor del post puede eliminarlo',
+      );
     }
     await this.prisma.post.delete({ where: { id: postId } });
     this.feedGateway.emitPostDeleted({ postId });
