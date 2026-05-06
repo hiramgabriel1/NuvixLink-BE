@@ -1,6 +1,5 @@
 import { Injectable } from '@nestjs/common';
 import { randomBytes } from 'crypto';
-import type { Express } from 'express';
 import type { Prisma } from '../generated/prisma/client';
 import { AppError, ErrorCode } from '../common/errors';
 import { NotificationsService } from '../notifications/notifications.service';
@@ -457,8 +456,8 @@ export class PostsService {
     };
   }
 
-  findMyBookmarks(userId: string) {
-    return this.prisma.bookmark
+  async findMyBookmarks(userId: string) {
+    const bookmarks = await this.prisma.bookmark
       .findMany({
         where: { userId },
         orderBy: { createdAt: 'desc' },
@@ -490,6 +489,7 @@ export class PostsService {
           post: postWithPublicCounts(b.post),
         })),
       );
+    return bookmarks;
   }
 
   async bookmarkPost(userId: string, postId: string) {
