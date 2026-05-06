@@ -47,7 +47,7 @@ model User {
   challengeSoloEnrollments ChallengeSoloEnrollment[]
   challengeTeamMemberships ChallengeTeamMember[]
 
-  hiddenPosts HiddenPost[]
+  hiddenPosts       HiddenPost[]
   hiddenDiscussions HiddenDiscussion[]
 
   createdAt DateTime @default(now())
@@ -173,6 +173,10 @@ model Post {
 
   @@index([authorId])
   @@index([createdAt])
+  // Feed "all": filtra isDraft=false y ordena por createdAt DESC
+  @@index([isDraft, createdAt(sort: Desc)])
+  // Feed "following": filtra isDraft=false + authorId IN (...) y ordena por createdAt DESC
+  @@index([isDraft, authorId, createdAt(sort: Desc)])
 }
 
 model DraftPost {
@@ -226,6 +230,7 @@ model HiddenPost {
 
   @@id([userId, postId])
   @@index([postId])
+  @@index([userId])
 }
 
 model Comment {
