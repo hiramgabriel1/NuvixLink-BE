@@ -30,15 +30,37 @@ function s3PostMediaKeyPrefix(): string {
 }
 
 /** Convierte `_count` de Prisma en campos explícitos por post (likes, bookmarks, comentarios). */
-function postWithPublicCounts<T extends { _count: { likes: number; bookmarks: number; comments: number } }>(
-  post: T,
-) {
+function postWithPublicCounts<
+  T extends { _count: { likes: number; bookmarks: number; comments: number } },
+>(post: T) {
   const { _count, ...rest } = post;
   return {
     ...rest,
     likesCount: _count.likes,
     bookmarksCount: _count.bookmarks,
     commentsCount: _count.comments,
+  };
+}
+
+/**
+ * Igual que postWithPublicCounts pero añade `likedByViewer` y `bookmarkedByViewer`
+ * cuando el include del feed incluye los arrays filtrados por viewer.
+ */
+function postWithViewerFields<
+  T extends {
+    _count: { likes: number; bookmarks: number; comments: number };
+    likes?: { userId: string }[];
+    bookmarks?: { userId: string }[];
+  },
+>(post: T) {
+  const { _count, likes, bookmarks, ...rest } = post;
+  return {
+    ...rest,
+    likesCount: _count.likes,
+    bookmarksCount: _count.bookmarks,
+    commentsCount: _count.comments,
+    likedByViewer: likes !== undefined ? likes.length > 0 : null,
+    bookmarkedByViewer: bookmarks !== undefined ? bookmarks.length > 0 : null,
   };
 }
 
@@ -51,7 +73,10 @@ export class PostsService {
     private readonly notifications: NotificationsService,
   ) {}
 
-  private async uploadPostImages(authorId: string, files?: Express.Multer.File[]): Promise<string[]> {
+  private async uploadPostImages(
+    authorId: string,
+    files?: Express.Multer.File[],
+  ): Promise<string[]> {
     const fromUploads: string[] = [];
     if (files?.length) {
       for (const file of files) {
@@ -127,34 +152,39 @@ export class PostsService {
     return fromName?.[1] ?? '.bin';
   }
 
-  private readonly postListInclude = {
-    author: {
-      select: {
-        id: true,
-        username: true,
-        photoKey: true,
-        isAdmin: true,
-      } as const,
-    },
-    _count: {
-      select: {
-        likes: true,
-        bookmarks: true,
-        comments: true,
-      } as const,
-    },
-  };
+  /** Construye el `include` del feed. Si se pasa `currentUserId` añade
+   * los arrays de likes/bookmarks filtrados para derivar `likedByViewer`
+   * y `bookmarkedByViewer` sin queries extra. */
+  private buildPostListInclude(currentUserId?: string) {
+    return {
+      author: {
+        select: {
+          id: true,
+          username: true,
+          photoKey: true,
+          isAdmin: true,
+        } as const,
+      },
+      _count: {
+        select: {
+          likes: true,
+          bookmarks: true,
+          comments: true,
+        } as const,
+      },
+      ...(currentUserId
+        ? {
+            likes: { where: { userId: currentUserId }, select: { userId: true } },
+            bookmarks: { where: { userId: currentUserId }, select: { userId: true } },
+          }
+        : {}),
+    };
+  }
 
   /** Orden estable: recientes primero; `id` desempata para que offset no “bailen” filas con el mismo `createdAt`. */
-  private readonly feedOrderBy = [
-    { createdAt: 'desc' as const },
-    { id: 'desc' as const },
-  ];
+  private readonly feedOrderBy = [{ createdAt: 'desc' as const }, { id: 'desc' as const }];
 
-  private readonly draftOrderBy = [
-    { updatedAt: 'desc' as const },
-    { id: 'desc' as const },
-  ];
+  private readonly draftOrderBy = [{ updatedAt: 'desc' as const }, { id: 'desc' as const }];
 
   async listMyDrafts(authorId: string, query: DraftPostsListQueryDto) {
     const limit = query.limit ?? 20;
@@ -289,24 +319,26 @@ export class PostsService {
     const limit = query.limit ?? 20;
     const offset = query.offset ?? 0;
 
-    const rows = await this.prisma.$queryRaw<Array<{
-      id: string;
-      title: string;
-      description: string | null;
-      media: string[];
-      website: string | null;
-      tags: string[];
-      isDraft: boolean;
-      createdAt: Date;
-      updatedAt: Date;
-      authorId: string;
-      username: string;
-      photoKey: string | null;
-      isAdmin: boolean;
-      likesCount: bigint;
-      bookmarksCount: bigint;
-      commentsCount: bigint;
-    }>>`
+    const rows = await this.prisma.$queryRaw<
+      Array<{
+        id: string;
+        title: string;
+        description: string | null;
+        media: string[];
+        website: string | null;
+        tags: string[];
+        isDraft: boolean;
+        createdAt: Date;
+        updatedAt: Date;
+        authorId: string;
+        username: string;
+        photoKey: string | null;
+        isAdmin: boolean;
+        likesCount: bigint;
+        bookmarksCount: bigint;
+        commentsCount: bigint;
+      }>
+    >`
       SELECT
         p.*,
         u."username",
@@ -362,10 +394,9 @@ export class PostsService {
     const limit = query.limit ?? 20;
     const offset = query.offset ?? 0;
 
-    const hiddenFilter =
-      currentUserId
-        ? { NOT: { hiddenBy: { some: { userId: currentUserId } } } }
-        : {};
+    const hiddenFilter = currentUserId
+      ? { NOT: { hiddenBy: { some: { userId: currentUserId } } } }
+      : {};
 
     if (filter === PostsListFilter.FOLLOWING) {
       if (!currentUserId) {
@@ -387,10 +418,10 @@ export class PostsService {
         orderBy: this.feedOrderBy,
         skip: offset,
         take: limit,
-        include: this.postListInclude,
+        include: this.buildPostListInclude(currentUserId),
       });
       return {
-        data: rows.map(postWithPublicCounts),
+        data: rows.map(postWithViewerFields),
         limit,
         offset,
         filter,
@@ -402,10 +433,10 @@ export class PostsService {
       orderBy: this.feedOrderBy,
       skip: offset,
       take: limit,
-      include: this.postListInclude,
+      include: this.buildPostListInclude(currentUserId),
     });
     return {
-      data: rows.map(postWithPublicCounts),
+      data: rows.map(postWithViewerFields),
       limit,
       offset,
       filter,
@@ -742,11 +773,7 @@ export class PostsService {
     }
   }
 
-  private async getCommentForOwnerOrThrow(
-    userId: string,
-    postId: string,
-    commentId: string,
-  ) {
+  private async getCommentForOwnerOrThrow(userId: string, postId: string, commentId: string) {
     const found = await this.prisma.comment.findUnique({
       where: { id: commentId },
       select: { id: true, postId: true, authorId: true },
@@ -1006,7 +1033,12 @@ export class PostsService {
     return postWithPublicCounts(post);
   }
 
-  async updatePost(authorId: string, postId: string, dto: UpdatePostDto, files?: Express.Multer.File[]) {
+  async updatePost(
+    authorId: string,
+    postId: string,
+    dto: UpdatePostDto,
+    files?: Express.Multer.File[],
+  ) {
     const existing = await this.prisma.post.findUnique({
       where: { id: postId },
       select: {
@@ -1083,7 +1115,10 @@ export class PostsService {
     });
     if (!post) AppError.notFound(ErrorCode.POST_NOT_FOUND, 'Post not found');
     if (post.authorId !== authorId) {
-      AppError.forbidden(ErrorCode.POST_FORBIDDEN_AUTHOR, 'Solo el autor del post puede eliminarlo');
+      AppError.forbidden(
+        ErrorCode.POST_FORBIDDEN_AUTHOR,
+        'Solo el autor del post puede eliminarlo',
+      );
     }
     await this.prisma.post.delete({ where: { id: postId } });
     this.feedGateway.emitPostDeleted({ postId });
