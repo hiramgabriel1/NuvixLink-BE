@@ -62,13 +62,11 @@ export class TurnstileController {
     });
 
    if (errors.length > 0) {
-    // LOGUEA EL ERROR REAL AQUÍ
-    this.logger.error('Validation Failed:', JSON.stringify(errors, null, 2));
-    
-    // Opcional: devuelve el error detallado al cliente en DEV
+  
     throw new BadRequestException({ 
-      error: 'validation-failed', 
-      details: errors.map(e => e.constraints) 
+      error: 'validation-failed',
+      // Only return property and constraints to avoid leaking potentially sensitive info in the error response
+      details: errors.map(e => ({ property: e.property, constraints: e.constraints }))
     });
   }
 

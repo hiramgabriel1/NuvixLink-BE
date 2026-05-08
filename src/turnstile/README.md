@@ -2,21 +2,21 @@
 
 ## Overview
 
-Este módulo implementa la verificación de Cloudflare Turnstile en el backend Nuvix. Recibe tokens de CAPTCHA del frontend y los valida contra los servidores de Cloudflare usando una clave secreta del servidor.
+This module implements Cloudflare Turnstile verification in the Nuvix backend. It receives CAPTCHA tokens from the frontend and validates them against Cloudflare servers using a server secret key.
 
 ## Architecture
 
-El módulo consta de tres componentes principales:
+The module consists of three main components:
 
-- **TurnstileService**: Lógica de verificación y comunicación con Cloudflare
-- **TurnstileController**: Endpoint HTTP para recibir tokens
-- **VerifyTurnstileDto**: Validación de entrada con class-validator
+- **TurnstileService**: Verification logic and communication with Cloudflare
+- **TurnstileController**: HTTP endpoint to receive tokens
+- **VerifyTurnstileDto**: Input validation using class-validator
 
 ## HTTP Endpoint
 
 ### POST `/turnstile/verify`
 
-Verifica un token de Turnstile generado en el cliente.
+Verifies a Turnstile token generated on the client side.
 
 **Request Body:**
 
@@ -25,9 +25,10 @@ Verifica un token de Turnstile generado en el cliente.
   "token": "0.xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
 }
 ```
+*Note: The token can also be provided as `captchaToken`.*
 
 **Response (200):**
-Respuesta exacta de Cloudflare (no modificada):
+Exact response from Cloudflare (unmodified):
 
 ```json
 {
@@ -40,7 +41,7 @@ Respuesta exacta de Cloudflare (no modificada):
 
 **Error Responses:**
 
-- **400 Bad Request**: Token faltante o inválido
+- **400 Bad Request**: Missing or invalid token
 
   ```json
   {
@@ -48,7 +49,7 @@ Respuesta exacta de Cloudflare (no modificada):
   }
   ```
 
-- **502 Bad Gateway**: Fallo en upstream (Cloudflare)
+- **502 Bad Gateway**: Upstream failure (Cloudflare)
 
   ```json
   {
@@ -57,7 +58,7 @@ Respuesta exacta de Cloudflare (no modificada):
   }
   ```
 
-- **500 Internal Server Error**: Error de configuración
+- **500 Internal Server Error**: Configuration error
   ```json
   {
     "error": "internal"
@@ -73,23 +74,23 @@ Respuesta exacta de Cloudflare (no modificada):
 NUVIX_TURNSTILE_SECRET=<your_secret_here>
 ```
 
-Obtén la clave en [Cloudflare Dashboard](https://dash.cloudflare.com/?to=/:account/turnstile).
+Get the key from the [Cloudflare Dashboard](https://dash.cloudflare.com/?to=/:account/turnstile).
 
 ## Implementation Details
 
 ### Security
 
-- **Secret Management**: La clave secreta se lee de `process.env.NUVIX_TURNSTILE_SECRET` y NUNCA se expone en logs o responses
-- **Token Validation**: Se valida con `class-validator` antes de procesar
-- **Payload Verification**: Cloudflare response siempre debe contener `success: boolean`
-- **Network Isolation**: Endpoint interno (se espera ejecutarse en red privada)
+- **Secret Management**: The secret key is read from `process.env.NUVIX_TURNSTILE_SECRET` and is NEVER exposed in logs or responses.
+- **Token Validation**: Validated using `class-validator` before processing.
+- **Payload Verification**: The Cloudflare response must always contain `success: boolean`.
+- **Network Isolation**: Internal endpoint (expected to run in a private network).
 
 ### Reliability
 
-- **Timeouts**: 3 segundos por defecto (`REQUEST_TIMEOUT_MS`)
-- **Retries**: Hasta 2 intentos (`MAX_ATTEMPTS`)
-- **Error Handling**: Errores upstream capturados y transformados a respuestas estándar
-- **Logging**: Solo se loguean errores no sensibles (nunca secret ni tokens)
+- **Timeouts**: 3 seconds by default (`REQUEST_TIMEOUT_MS`).
+- **Retries**: Up to 2 attempts (`MAX_ATTEMPTS`).
+- **Error Handling**: Upstream errors are caught and transformed into standard responses.
+- **Logging**: Only non-sensitive errors are logged (secrets and tokens are never logged).
 
 ### Cloudflare API Call
 
@@ -102,31 +103,31 @@ secret={secret}&response={token}&remoteip={optional_ip}
 
 ## Testing
 
-Ejecuta las pruebas unitarias:
+Run unit tests:
 
 ```bash
 npm test -- src/turnstile
 ```
 
-Tests incluyen:
+Tests include:
 
-- Verificación exitosa con payload de Cloudflare
-- Fallos upstream (con reintentos)
-- Errores de configuración
-- Validación de entrada
-- Propagación de errores desde el service
+- Successful verification with Cloudflare payload
+- Upstream failures (with retries)
+- Configuration errors
+- Input validation (for both `token` and `captchaToken`)
+- Error propagation from the service
 
 ## Integration with BFF
 
-El BFF debe proxy esta ruta:
+The BFF must proxy this route:
 
 ```
-Frontend POST /api/nuvix/turnstile/verify (al BFF)
-BFF proxy a Backend POST /turnstile/verify
-BFF devuelve response exacta al frontend
+Frontend POST /api/nuvix/turnstile/verify (to BFF)
+BFF proxies to Backend POST /turnstile/verify
+BFF returns the exact response to the frontend
 ```
 
-El frontend recibe:
+The frontend receives:
 
 ```json
 {

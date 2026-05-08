@@ -76,14 +76,7 @@ export class TurnstileService {
         throw new TurnstileUpstreamError(`Upstream responded with status ${response.status}`);
       }
 
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const payload = (await response.json()) as any;
-      // LOG CRÍTICO
-this.logger.debug(`Cloudflare Raw Response: ${JSON.stringify(payload)}`);
-
-if (!payload.success) {
-  this.logger.warn(`Cloudflare rejected token. Error codes: ${payload['error-codes']}`);
-}
+      const payload = (await response.json()) as unknown;
       if (!this.isTurnstilePayload(payload)) {
         throw new TurnstileUpstreamError('Unexpected upstream payload shape');
       }
