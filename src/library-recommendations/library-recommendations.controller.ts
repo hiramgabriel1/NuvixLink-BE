@@ -36,6 +36,11 @@ export class LibraryRecommendationsController {
     return this.libraryRecommendationsService.findAll(query);
   }
 
+  @Get(':id')
+  async findById(@Param('id') id: string) {
+    return this.libraryRecommendationsService.findById(id);
+  }
+
   @Post()
   @UseGuards(JwtAuthGuard)
   async create(@Request() req: AuthRequest, @Body() createDto: CreateLibraryRecommendationDto) {

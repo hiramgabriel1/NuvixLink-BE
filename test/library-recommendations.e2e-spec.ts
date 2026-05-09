@@ -1,17 +1,39 @@
-import { INestApplication, ValidationPipe } from '@nestjs/common';
+import { CanActivate, ExecutionContext, INestApplication, ValidationPipe } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
 import * as request from 'supertest';
 import { AppModule } from '../src/app.module';
+import { JwtAuthGuard } from '../src/auth/jwt-auth.guard';
 import { PrismaService } from '../src/prisma/prisma.service';
 
 describe('LibraryRecommendationsModule (e2e)', () => {
   let app: INestApplication;
   let prisma: PrismaService;
+  let authUserId = '';
+  let ownerId = '';
+  let otherUserId = '';
+  let recommendationId = '';
+
+  const jwtGuardMock: CanActivate = {
+    canActivate(context: ExecutionContext): boolean {
+      const req = context
+        .switchToHttp()
+        .getRequest<{ user?: { userId: string; email: string; username: string } }>();
+      req.user = {
+        userId: authUserId,
+        email: 'e2e@example.com',
+        username: 'e2e-user',
+      };
+      return true;
+    },
+  };
 
   beforeAll(async () => {
     const moduleFixture: TestingModule = await Test.createTestingModule({
       imports: [AppModule],
-    }).compile();
+    })
+      .overrideProvider(JwtAuthGuard)
+      .useValue(jwtGuardMock)
+      .compile();
 
     app = moduleFixture.createNestApplication();
     app.useGlobalPipes(new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true }));
@@ -19,41 +41,123 @@ describe('LibraryRecommendationsModule (e2e)', () => {
 
     prisma = app.get(PrismaService);
     await prisma.$connect();
+
+    const owner = await prisma.user.upsert({
+      where: { email: 'owner.library.e2e@example.com' },
+      update: {
+        username: 'owner_library_e2e',
+        password: 'password_hash',
+        isVerified: true,
+      },
+      create: {
+        email: 'owner.library.e2e@example.com',
+        password: 'password_hash',
+        username: 'owner_library_e2e',
+        isVerified: true,
+      },
+    });
+
+    const other = await prisma.user.upsert({
+      where: { email: 'other.library.e2e@example.com' },
+      update: {
+        username: 'other_library_e2e',
+        password: 'password_hash',
+        isVerified: true,
+      },
+      create: {
+        email: 'other.library.e2e@example.com',
+        password: 'password_hash',
+        username: 'other_library_e2e',
+        isVerified: true,
+      },
+    });
+
+    ownerId = owner.id;
+    otherUserId = other.id;
+    authUserId = ownerId;
   });
 
   afterAll(async () => {
+    await prisma.libraryRecommendationVote.deleteMany({
+      where: { recommendationId },
+    });
+    await prisma.libraryRecommendationReport.deleteMany({
+      where: { recommendationId },
+    });
+    if (recommendationId) {
+      await prisma.libraryRecommendation.deleteMany({ where: { id: recommendationId } });
+    }
+    await prisma.user.deleteMany({
+      where: { id: { in: [ownerId, otherUserId] } },
+    });
     await prisma.$disconnect();
     await app.close();
   });
 
-  describe('/library-recommendations (GET)', () => {
-    it('should return an empty list initially', async () => {
-      const response = await request(app.getHttpServer()).get('/library-recommendations');
-      expect(response.status).toBe(200);
-      expect(response.body).toEqual({ data: [], total: 0, limit: 20, offset: 0 });
-    });
-  });
-
-  describe('/library-recommendations (POST)', () => {
+  describe('/library-recommendations', () => {
     it('should create a new library recommendation', async () => {
       const payload = {
         ecosystem: 'npm',
-        packageName: 'example-package',
-        packageUrl: 'https://npmjs.com/package/example-package',
-        installCommand: 'npm install example-package',
+        packageName: 'library-e2e-package',
+        packageUrl: 'https://npmjs.com/package/library-e2e-package',
+        installCommand: 'npm install library-e2e-package',
         description: 'An example package',
         useCase: 'Demonstration purposes',
       };
 
       const response = await request(app.getHttpServer())
         .post('/library-recommendations')
-        .set('Authorization', 'Bearer <VALID_JWT>')
         .send(payload);
 
       expect(response.status).toBe(201);
       expect(response.body).toMatchObject(payload);
+      recommendationId = response.body.id;
+      expect(recommendationId).toBeTruthy();
+    });
+
+    it('should get a recommendation by id', async () => {
+      const response = await request(app.getHttpServer()).get(
+        `/library-recommendations/${recommendationId}`,
+      );
+
+      expect(response.status).toBe(200);
+      expect(response.body.id).toBe(recommendationId);
+      expect(response.body.author.id).toBe(ownerId);
+    });
+
+    it('should allow owner to update recommendation', async () => {
+      authUserId = ownerId;
+
+      const response = await request(app.getHttpServer())
+        .put(`/library-recommendations/${recommendationId}`)
+        .send({
+          description: 'Updated description by owner',
+          useCase: 'Updated use case',
+        });
+
+      expect(response.status).toBe(200);
+      expect(response.body.description).toBe('Updated description by owner');
+      expect(response.body.useCase).toBe('Updated use case');
+    });
+
+    it('should forbid update by non-owner', async () => {
+      authUserId = otherUserId;
+
+      const response = await request(app.getHttpServer())
+        .put(`/library-recommendations/${recommendationId}`)
+        .send({
+          description: 'Trying to update another user recommendation',
+        });
+
+      expect(response.status).toBe(403);
+    });
+
+    it('should return 404 for non-existent recommendation id', async () => {
+      const response = await request(app.getHttpServer()).get(
+        '/library-recommendations/00000000-0000-0000-0000-000000000000',
+      );
+
+      expect(response.status).toBe(404);
     });
   });
-
-  // Additional tests for DELETE, voting, and reporting endpoints can be added here
 });

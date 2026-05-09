@@ -15,6 +15,56 @@ import { UpdateLibraryRecommendationDto } from './dto/update-library-recommendat
 export class LibraryRecommendationsService {
   constructor(private readonly prisma: PrismaService) {}
 
+  async findById(id: string): Promise<{
+    id: string;
+    packageName: string;
+    packageUrl: string;
+    description: string;
+    useCase: string;
+    ecosystem: string;
+    authorId: string;
+    createdAt: Date;
+    updatedAt: Date;
+    voteCount: number;
+    reportCount: number;
+    author: {
+      id: string;
+      username: string;
+      avatarUrl: string;
+    };
+  }> {
+    const item = await this.prisma.libraryRecommendation.findUnique({
+      where: { id },
+      include: {
+        author: {
+          select: { id: true, username: true, photoKey: true },
+        },
+        _count: {
+          select: { votes: true, reports: true },
+        },
+      },
+    });
+
+    if (!item) {
+      throw new NotFoundException('Recommendation not found.');
+    }
+
+    const avatarBaseUrl = process.env.S3_USERS_BASE_URL || '';
+    const avatarUrl = item.author?.photoKey ? `${avatarBaseUrl}/${item.author.photoKey}` : '';
+    const { _count, author, ...rest } = item;
+
+    return {
+      ...rest,
+      voteCount: _count?.votes ?? 0,
+      reportCount: _count?.reports ?? 0,
+      author: {
+        id: author?.id ?? '',
+        username: author?.username ?? '',
+        avatarUrl,
+      },
+    };
+  }
+
   async findAll(query: QueryLibraryRecommendationsDto): Promise<{
     data: Array<{
       id: string;
