@@ -159,5 +159,76 @@ describe('LibraryRecommendationsModule (e2e)', () => {
 
       expect(response.status).toBe(404);
     });
+
+    it('should allow voting and toggling vote', async () => {
+      authUserId = ownerId;
+
+      const likeResponse = await request(app.getHttpServer())
+        .post(`/library-recommendations/${recommendationId}/vote`)
+        .send({ value: 1 });
+
+      expect(likeResponse.status).toBe(201);
+      expect(likeResponse.body).toEqual({ voteCount: 1, userVote: 1 });
+
+      const toggleResponse = await request(app.getHttpServer())
+        .post(`/library-recommendations/${recommendationId}/vote`)
+        .send({ value: 1 });
+
+      expect(toggleResponse.status).toBe(201);
+      expect(toggleResponse.body).toEqual({ voteCount: 0, userVote: null });
+
+      const dislikeResponse = await request(app.getHttpServer())
+        .post(`/library-recommendations/${recommendationId}/vote`)
+        .send({ value: -1 });
+
+      expect(dislikeResponse.status).toBe(201);
+      expect(dislikeResponse.body).toEqual({ voteCount: -1, userVote: -1 });
+    });
+
+    it('should allow report and reject duplicate report', async () => {
+      authUserId = otherUserId;
+
+      const firstReport = await request(app.getHttpServer())
+        .post(`/library-recommendations/${recommendationId}/report`)
+        .send({ reason: 'Spam content for test' });
+
+      expect(firstReport.status).toBe(201);
+      expect(firstReport.body.id).toBeTruthy();
+
+      const duplicateReport = await request(app.getHttpServer())
+        .post(`/library-recommendations/${recommendationId}/report`)
+        .send({ reason: 'Duplicate report attempt' });
+
+      expect(duplicateReport.status).toBe(400);
+    });
+
+    it('should forbid delete by non-owner', async () => {
+      authUserId = otherUserId;
+
+      const response = await request(app.getHttpServer()).delete(
+        `/library-recommendations/${recommendationId}`,
+      );
+
+      expect(response.status).toBe(403);
+    });
+
+    it('should allow delete by owner', async () => {
+      authUserId = ownerId;
+
+      const response = await request(app.getHttpServer()).delete(
+        `/library-recommendations/${recommendationId}`,
+      );
+
+      expect(response.status).toBe(200);
+      expect(response.body.id).toBe(recommendationId);
+    });
+
+    it('should return 404 after recommendation is deleted', async () => {
+      const response = await request(app.getHttpServer()).get(
+        `/library-recommendations/${recommendationId}`,
+      );
+
+      expect(response.status).toBe(404);
+    });
   });
 });
