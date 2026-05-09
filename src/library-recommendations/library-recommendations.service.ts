@@ -125,7 +125,7 @@ export class LibraryRecommendationsService {
       this.prisma.libraryRecommendation.count({ where }),
     ]);
 
-    // Puedes ajustar la URL base del avatar según tu configuración real
+   
     const AVATAR_BASE_URL = process.env.S3_USERS_BASE_URL || '';
 
     return {
