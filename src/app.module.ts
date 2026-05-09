@@ -14,6 +14,8 @@ import { StorageModule } from './storage/storage.module';
 import { UsersModule } from './users/users.module';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
+import { TurnstileModule } from './turnstile/turnstile.module';
+import { LibraryRecommendationsModule } from './library-recommendations/library-recommendations.module';
 
 @Module({
   imports: [
@@ -33,6 +35,8 @@ import { AppService } from './app.service';
     UsersModule,
     ChallengesModule,
     SearchModule,
+    TurnstileModule,
+    LibraryRecommendationsModule,
   ],
   controllers: [AppController],
   providers: [
