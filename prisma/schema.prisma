@@ -50,6 +50,10 @@ model User {
   hiddenPosts       HiddenPost[]
   hiddenDiscussions HiddenDiscussion[]
 
+  libraryRecommendations        LibraryRecommendation[]
+  libraryRecommendationVotes   LibraryRecommendationVote[]
+  libraryRecommendationReports LibraryRecommendationReport[]
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 }
@@ -406,4 +410,56 @@ model HiddenDiscussion {
 
   @@id([userId, discussionId])
   @@index([discussionId])
+}
+
+model LibraryRecommendation {
+  id             String   @id @default(uuid())
+  ecosystem      String   // "npm" | "maven" | "nuget" | "cargo"
+  packageName    String
+  packageUrl     String
+  installCommand String
+  description    String
+  useCase        String
+  docsUrl        String?
+  githubUrl      String?
+  stars          Int?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  authorId       String
+  author         User     @relation(fields: [authorId], references: [id], onDelete: Cascade)
+
+  votes          LibraryRecommendationVote[]
+  reports        LibraryRecommendationReport[]
+
+  @@unique([authorId, packageUrl])
+  @@index([ecosystem])
+}
+
+model LibraryRecommendationVote {
+  id               String   @id @default(uuid())
+  value            Int      // 1 = like, -1 = dislike
+  createdAt        DateTime @default(now())
+
+  userId           String
+  user             User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  recommendationId String
+  recommendation   LibraryRecommendation @relation(fields: [recommendationId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, recommendationId])
+}
+
+model LibraryRecommendationReport {
+  id               String   @id @default(uuid())
+  reason           String
+  createdAt        DateTime @default(now())
+
+  userId           String
+  user             User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  recommendationId String
+  recommendation   LibraryRecommendation @relation(fields: [recommendationId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, recommendationId])
 }
