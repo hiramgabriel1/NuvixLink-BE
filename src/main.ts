@@ -35,7 +35,7 @@ async function bootstrap() {
   const swaggerConfig = new DocumentBuilder()
     .setTitle('Nuvix Backend API')
     .setDescription('API docs for auth, users and posts')
-    .setVersion('1.0.1')
+    .setVersion('1.0.2')
     .addBearerAuth()
     .build();
   const document = SwaggerModule.createDocument(app, swaggerConfig);
