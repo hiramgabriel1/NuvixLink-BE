@@ -5,8 +5,10 @@ import {
   Get,
   Param,
   Post,
+  Put,
   Query,
   Request,
+  UnauthorizedException,
   UseGuards,
 } from '@nestjs/common';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
@@ -15,6 +17,7 @@ import { CreateLibraryRecommendationDto } from './dto/create-library-recommendat
 import { QueryLibraryRecommendationsDto } from './dto/query-library-recommendations.dto';
 import { VoteLibraryRecommendationDto } from './dto/vote-library-recommendation.dto';
 import { ReportLibraryRecommendationDto } from './dto/report-library-recommendation.dto';
+import { UpdateLibraryRecommendationDto } from './dto/update-library-recommendation.dto';
 
 interface AuthRequest {
   user?: {
@@ -38,7 +41,7 @@ export class LibraryRecommendationsController {
   async create(@Request() req: AuthRequest, @Body() createDto: CreateLibraryRecommendationDto) {
     const authorId = req.user?.userId;
     if (!authorId) {
-      throw new Error('User not authenticated');
+      throw new UnauthorizedException('User not authenticated');
     }
     return this.libraryRecommendationsService.create({ ...createDto, authorId });
   }
@@ -48,9 +51,23 @@ export class LibraryRecommendationsController {
   async remove(@Request() req: AuthRequest, @Param('id') id: string) {
     const userId = req.user?.userId;
     if (!userId) {
-      throw new Error('User not authenticated');
+      throw new UnauthorizedException('User not authenticated');
     }
     return this.libraryRecommendationsService.remove(id, userId);
+  }
+
+  @Put(':id')
+  @UseGuards(JwtAuthGuard)
+  async update(
+    @Request() req: AuthRequest,
+    @Param('id') id: string,
+    @Body() updateDto: UpdateLibraryRecommendationDto,
+  ) {
+    const userId = req.user?.userId;
+    if (!userId) {
+      throw new UnauthorizedException('User not authenticated');
+    }
+    return this.libraryRecommendationsService.update(id, userId, updateDto);
   }
 
   @Post(':id/vote')
@@ -62,7 +79,7 @@ export class LibraryRecommendationsController {
   ) {
     const userId = req.user?.userId;
     if (!userId) {
-      throw new Error('User not authenticated');
+      throw new UnauthorizedException('User not authenticated');
     }
     return this.libraryRecommendationsService.vote(id, { ...voteDto, userId });
   }
@@ -76,7 +93,7 @@ export class LibraryRecommendationsController {
   ) {
     const userId = req.user?.userId;
     if (!userId) {
-      throw new Error('User not authenticated');
+      throw new UnauthorizedException('User not authenticated');
     }
     return this.libraryRecommendationsService.report(id, { ...reportDto, userId });
   }

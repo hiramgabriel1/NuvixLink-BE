@@ -1,9 +1,15 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ForbiddenException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateLibraryRecommendationDto } from './dto/create-library-recommendation.dto';
 import { QueryLibraryRecommendationsDto } from './dto/query-library-recommendations.dto';
 import { VoteLibraryRecommendationDto } from './dto/vote-library-recommendation.dto';
 import { ReportLibraryRecommendationDto } from './dto/report-library-recommendation.dto';
+import { UpdateLibraryRecommendationDto } from './dto/update-library-recommendation.dto';
 
 @Injectable()
 export class LibraryRecommendationsService {
@@ -118,10 +124,43 @@ export class LibraryRecommendationsService {
     }
 
     if (recommendation.authorId !== userId) {
-      throw new Error('You can only delete your own recommendations.');
+      throw new ForbiddenException('You can only delete your own recommendations.');
     }
 
     return this.prisma.libraryRecommendation.delete({ where: { id } });
+  }
+
+  async update(id: string, userId: string, dto: UpdateLibraryRecommendationDto): Promise<unknown> {
+    const recommendation = await this.prisma.libraryRecommendation.findUnique({
+      where: { id },
+    });
+
+    if (!recommendation) {
+      throw new NotFoundException('Recommendation not found.');
+    }
+
+    if (recommendation.authorId !== userId) {
+      throw new ForbiddenException('You can only update your own recommendations.');
+    }
+
+    if (dto.packageUrl) {
+      const duplicate = await this.prisma.libraryRecommendation.findFirst({
+        where: {
+          authorId: userId,
+          packageUrl: dto.packageUrl,
+          NOT: { id },
+        },
+      });
+
+      if (duplicate) {
+        throw new BadRequestException('Recommendation already exists for this package.');
+      }
+    }
+
+    return this.prisma.libraryRecommendation.update({
+      where: { id },
+      data: dto,
+    });
   }
 
   async vote(
