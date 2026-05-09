@@ -1,10 +1,28 @@
-import { Body, Delete, Get, Param, Post, Query, UseGuards } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  Param,
+  Post,
+  Query,
+  Request,
+  UseGuards,
+} from '@nestjs/common';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { LibraryRecommendationsService } from './library-recommendations.service';
 import { CreateLibraryRecommendationDto } from './dto/create-library-recommendation.dto';
 import { QueryLibraryRecommendationsDto } from './dto/query-library-recommendations.dto';
 import { VoteLibraryRecommendationDto } from './dto/vote-library-recommendation.dto';
 import { ReportLibraryRecommendationDto } from './dto/report-library-recommendation.dto';
+
+interface AuthRequest {
+  user?: {
+    userId: string;
+    email: string;
+    username: string;
+  };
+}
 
 @Controller('library-recommendations')
 export class LibraryRecommendationsController {
@@ -17,25 +35,49 @@ export class LibraryRecommendationsController {
 
   @Post()
   @UseGuards(JwtAuthGuard)
-  async create(@Body() createDto: CreateLibraryRecommendationDto) {
-    return this.libraryRecommendationsService.create(createDto);
+  async create(@Request() req: AuthRequest, @Body() createDto: CreateLibraryRecommendationDto) {
+    const authorId = req.user?.userId;
+    if (!authorId) {
+      throw new Error('User not authenticated');
+    }
+    return this.libraryRecommendationsService.create({ ...createDto, authorId });
   }
 
   @Delete(':id')
   @UseGuards(JwtAuthGuard)
-  async remove(@Param('id') id: string) {
-    return this.libraryRecommendationsService.remove(id);
+  async remove(@Request() req: AuthRequest, @Param('id') id: string) {
+    const userId = req.user?.userId;
+    if (!userId) {
+      throw new Error('User not authenticated');
+    }
+    return this.libraryRecommendationsService.remove(id, userId);
   }
 
   @Post(':id/vote')
   @UseGuards(JwtAuthGuard)
-  async vote(@Param('id') id: string, @Body() voteDto: VoteLibraryRecommendationDto) {
-    return this.libraryRecommendationsService.vote(id, voteDto);
+  async vote(
+    @Request() req: AuthRequest,
+    @Param('id') id: string,
+    @Body() voteDto: VoteLibraryRecommendationDto,
+  ) {
+    const userId = req.user?.userId;
+    if (!userId) {
+      throw new Error('User not authenticated');
+    }
+    return this.libraryRecommendationsService.vote(id, { ...voteDto, userId });
   }
 
   @Post(':id/report')
   @UseGuards(JwtAuthGuard)
-  async report(@Param('id') id: string, @Body() reportDto: ReportLibraryRecommendationDto) {
-    return this.libraryRecommendationsService.report(id, reportDto);
+  async report(
+    @Request() req: AuthRequest,
+    @Param('id') id: string,
+    @Body() reportDto: ReportLibraryRecommendationDto,
+  ) {
+    const userId = req.user?.userId;
+    if (!userId) {
+      throw new Error('User not authenticated');
+    }
+    return this.libraryRecommendationsService.report(id, { ...reportDto, userId });
   }
 }

@@ -2,25 +2,25 @@ import { IsIn, IsInt, IsOptional, IsString, IsUrl, MaxLength, Min } from 'class-
 
 export class CreateLibraryRecommendationDto {
   @IsIn(['npm', 'maven', 'nuget', 'cargo'])
-  ecosystem: string;
+  ecosystem!: string;
 
   @IsString()
   @MaxLength(120)
-  packageName: string;
+  packageName!: string;
 
   @IsUrl()
-  packageUrl: string;
+  packageUrl!: string;
 
   @IsString()
-  installCommand: string;
+  installCommand!: string;
 
   @IsString()
   @MaxLength(260)
-  description: string;
+  description!: string;
 
   @IsString()
   @MaxLength(220)
-  useCase: string;
+  useCase!: string;
 
   @IsUrl()
   @IsOptional()
@@ -35,5 +35,5 @@ export class CreateLibraryRecommendationDto {
   @IsOptional()
   stars?: number;
 
-  authorId: string; // This will be set from the authenticated user
+  authorId!: string; // This will be set from the authenticated user
 }

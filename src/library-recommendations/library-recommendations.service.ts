@@ -9,8 +9,32 @@ import { ReportLibraryRecommendationDto } from './dto/report-library-recommendat
 export class LibraryRecommendationsService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async findAll(query: QueryLibraryRecommendationsDto) {
+  async findAll(query: QueryLibraryRecommendationsDto): Promise<{
+    data: Array<{
+      id: string;
+      packageName: string;
+      packageUrl: string;
+      description: string;
+      useCase: string;
+      ecosystem: string;
+      authorId: string;
+      createdAt: Date;
+      updatedAt: Date;
+      voteCount: number;
+      reportCount: number;
+      author: {
+        id: string;
+        username: string;
+        avatarUrl: string;
+      };
+    }>;
+    total: number;
+    limit: number;
+    offset: number;
+  }> {
     const { ecosystem, search, sort = 'newest', limit = 20, offset = 0 } = query;
+    const take = Math.min(Number(limit), 50);
+    const skip = Number(offset);
 
     const where: Record<string, unknown> = {};
     if (ecosystem) where.ecosystem = ecosystem;
@@ -22,15 +46,17 @@ export class LibraryRecommendationsService {
       ];
     }
 
-    const orderBy =
-      sort === 'votes' ? { votes: { _count: 'desc' } } : { createdAt: 'desc' };
+    let orderBy: { createdAt?: 'desc'; votes?: { _count: 'desc' } } = { createdAt: 'desc' };
+    if (sort === 'votes') {
+      orderBy = { votes: { _count: 'desc' } };
+    }
 
     const [data, total] = await this.prisma.$transaction([
       this.prisma.libraryRecommendation.findMany({
         where,
         orderBy,
-        take: Math.min(limit, 50),
-        skip: offset,
+        take,
+        skip,
         include: {
           author: {
             select: { id: true, username: true, photoKey: true },
@@ -43,24 +69,31 @@ export class LibraryRecommendationsService {
       this.prisma.libraryRecommendation.count({ where }),
     ]);
 
+    // Puedes ajustar la URL base del avatar según tu configuración real
+    const AVATAR_BASE_URL = process.env.S3_USERS_BASE_URL || '';
+
     return {
-      data: data.map((item) => ({
-        ...item,
-        voteCount: item._count.votes,
-        reportCount: item._count.reports,
-        author: {
-          id: item.author.id,
-          username: item.author.username,
-          avatarUrl: item.author.photoKey,
-        },
-      })),
+      data: data.map((item) => {
+        const avatarUrl = item.author?.photoKey ? `${AVATAR_BASE_URL}/${item.author.photoKey}` : '';
+        const { _count, author, ...rest } = item;
+        return {
+          ...rest,
+          voteCount: _count?.votes ?? 0,
+          reportCount: _count?.reports ?? 0,
+          author: {
+            id: author?.id ?? '',
+            username: author?.username ?? '',
+            avatarUrl,
+          },
+        };
+      }),
       total,
       limit,
       offset,
     };
   }
 
-  async create(dto: CreateLibraryRecommendationDto) {
+  async create(dto: CreateLibraryRecommendationDto): Promise<unknown> {
     const exists = await this.prisma.libraryRecommendation.findFirst({
       where: { authorId: dto.authorId, packageUrl: dto.packageUrl },
     });
@@ -74,19 +107,27 @@ export class LibraryRecommendationsService {
     });
   }
 
-  async remove(id: string) {
+  async remove(id: string, userId: string): Promise<unknown> {
     const recommendation = await this.prisma.libraryRecommendation.findUnique({
       where: { id },
+      include: { author: { select: { id: true } } },
     });
 
     if (!recommendation) {
       throw new NotFoundException('Recommendation not found.');
     }
 
+    if (recommendation.authorId !== userId) {
+      throw new Error('You can only delete your own recommendations.');
+    }
+
     return this.prisma.libraryRecommendation.delete({ where: { id } });
   }
 
-  async vote(id: string, dto: VoteLibraryRecommendationDto) {
+  async vote(
+    id: string,
+    dto: VoteLibraryRecommendationDto,
+  ): Promise<{ voteCount: number; userVote: 1 | -1 | null }> {
     const { userId, value } = dto;
 
     const existingVote = await this.prisma.libraryRecommendationVote.findUnique({
@@ -114,7 +155,7 @@ export class LibraryRecommendationsService {
     return this.getVoteSummary(id, userId);
   }
 
-  async report(id: string, dto: ReportLibraryRecommendationDto) {
+  async report(id: string, dto: ReportLibraryRecommendationDto): Promise<unknown> {
     const { userId, reason } = dto;
 
     const existingReport = await this.prisma.libraryRecommendationReport.findUnique({
@@ -130,7 +171,10 @@ export class LibraryRecommendationsService {
     });
   }
 
-  private async getVoteSummary(recommendationId: string, userId: string) {
+  private async getVoteSummary(
+    recommendationId: string,
+    userId: string,
+  ): Promise<{ voteCount: number; userVote: 1 | -1 | null }> {
     const [voteCount, userVote] = await this.prisma.$transaction([
       this.prisma.libraryRecommendationVote.aggregate({
         where: { recommendationId },
@@ -141,9 +185,13 @@ export class LibraryRecommendationsService {
       }),
     ]);
 
+    let userVoteValue: 1 | -1 | null = null;
+    if (userVote?.value === 1 || userVote?.value === -1) {
+      userVoteValue = userVote.value;
+    }
     return {
       voteCount: voteCount._sum.value || 0,
-      userVote: userVote?.value || null,
+      userVote: userVoteValue,
     };
   }
 }
