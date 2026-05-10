@@ -15,6 +15,10 @@ import { UpdateLibraryRecommendationDto } from './dto/update-library-recommendat
 export class LibraryRecommendationsService {
   constructor(private readonly prisma: PrismaService) {}
 
+  private normalizeAvatarUrl(photoKey?: string | null): string {
+    return (photoKey ?? '').trim().replace(/^\/+/, '');
+  }
+
   async findById(id: string): Promise<{
     id: string;
     packageName: string;
@@ -49,8 +53,6 @@ export class LibraryRecommendationsService {
       throw new NotFoundException('Recommendation not found.');
     }
 
-    const avatarBaseUrl = process.env.S3_USERS_BASE_URL || '';
-    const avatarUrl = item.author?.photoKey ? `${avatarBaseUrl}/${item.author.photoKey}` : '';
     const { _count, author, ...rest } = item;
 
     return {
@@ -60,7 +62,7 @@ export class LibraryRecommendationsService {
       author: {
         id: author?.id ?? '',
         username: author?.username ?? '',
-        avatarUrl,
+        avatarUrl: this.normalizeAvatarUrl(author?.photoKey),
       },
     };
   }
@@ -125,12 +127,8 @@ export class LibraryRecommendationsService {
       this.prisma.libraryRecommendation.count({ where }),
     ]);
 
-   
-    const AVATAR_BASE_URL = process.env.S3_USERS_BASE_URL || '';
-
     return {
       data: data.map((item) => {
-        const avatarUrl = item.author?.photoKey ? `${AVATAR_BASE_URL}/${item.author.photoKey}` : '';
         const { _count, author, ...rest } = item;
         return {
           ...rest,
@@ -139,7 +137,7 @@ export class LibraryRecommendationsService {
           author: {
             id: author?.id ?? '',
             username: author?.username ?? '',
-            avatarUrl,
+            avatarUrl: this.normalizeAvatarUrl(author?.photoKey),
           },
         };
       }),
