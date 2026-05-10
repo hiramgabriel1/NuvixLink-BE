@@ -21,12 +21,18 @@ export const INSTALL_COMMAND_PREFIXES = {
   cargo: ['cargo add'],
 };
 
+type Ecosystem = keyof typeof ECOSYSTEM_DOMAINS;
+
+function isEcosystem(ecosystem: string): ecosystem is Ecosystem {
+  return Object.prototype.hasOwnProperty.call(ECOSYSTEM_DOMAINS, ecosystem);
+}
+
 export function validateEcosystemDomain(ecosystem: string, url: string) {
-  const validDomains = ECOSYSTEM_DOMAINS[ecosystem];
-  if (!validDomains) {
+  if (!isEcosystem(ecosystem)) {
     throw new BadRequestException(`Invalid ecosystem: ${ecosystem}`);
   }
 
+  const validDomains = ECOSYSTEM_DOMAINS[ecosystem];
   const isValid = validDomains.some((domain) => url.includes(domain));
   if (!isValid) {
     throw new BadRequestException(`URL does not match valid domains for ecosystem: ${ecosystem}`);
@@ -34,22 +40,22 @@ export function validateEcosystemDomain(ecosystem: string, url: string) {
 }
 
 export function validatePackageName(ecosystem: string, packageName: string) {
-  const regex = PACKAGE_NAME_REGEX[ecosystem];
-  if (!regex) {
+  if (!isEcosystem(ecosystem)) {
     throw new BadRequestException(`Invalid ecosystem: ${ecosystem}`);
   }
 
+  const regex = PACKAGE_NAME_REGEX[ecosystem];
   if (!regex.test(packageName)) {
     throw new BadRequestException(`Invalid package name for ecosystem: ${ecosystem}`);
   }
 }
 
 export function validateInstallCommand(ecosystem: string, command: string) {
-  const validPrefixes = INSTALL_COMMAND_PREFIXES[ecosystem];
-  if (!validPrefixes) {
+  if (!isEcosystem(ecosystem)) {
     throw new BadRequestException(`Invalid ecosystem: ${ecosystem}`);
   }
 
+  const validPrefixes = INSTALL_COMMAND_PREFIXES[ecosystem];
   const isValid = validPrefixes.some((prefix) => command.startsWith(prefix));
   if (!isValid) {
     throw new BadRequestException(`Install command does not match valid prefixes for ecosystem: ${ecosystem}`);
