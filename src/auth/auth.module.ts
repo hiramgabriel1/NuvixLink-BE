@@ -22,7 +22,13 @@ import { OptionalJwtAuthGuard } from './optional-jwt-auth.guard';
     }),
   ],
   controllers: [AuthController, GithubAuthController],
-  providers: [AuthService, JwtStrategy, GithubStrategy, JwtAuthGuard, OptionalJwtAuthGuard],
+  providers: [
+    AuthService,
+    JwtStrategy,
+    ...(process.env.GITHUB_CLIENT_ID && process.env.GITHUB_CLIENT_SECRET ? [GithubStrategy] : []),
+    JwtAuthGuard,
+    OptionalJwtAuthGuard,
+  ],
   exports: [AuthService, JwtAuthGuard, OptionalJwtAuthGuard, JwtModule],
 })
 export class AuthModule {}
