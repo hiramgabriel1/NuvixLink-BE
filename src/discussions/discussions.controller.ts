@@ -11,7 +11,9 @@ import {
   Query,
   Req,
   UseGuards,
+  UseInterceptors,
 } from '@nestjs/common';
+import { NoFilesInterceptor } from '@nestjs/platform-express';
 import { Request } from 'express';
 import {
   ApiBearerAuth,
@@ -57,6 +59,7 @@ export class DiscussionsController {
   @ApiUnauthorizedResponse({ description: 'Missing or invalid bearer token' })
   @ApiCreatedResponse({ description: 'Discusión creada' })
   @UseGuards(JwtAuthGuard)
+  @UseInterceptors(NoFilesInterceptor())
   @HttpPost()
   @HttpCode(HttpStatus.CREATED)
   create(@Req() req: AuthRequest, @Body() dto: CreateDiscussionDto) {
@@ -279,5 +282,28 @@ export class DiscussionsController {
   @Get(':id')
   findOne(@Param('id') id: string) {
     return this.discussionsService.findOne(id);
+  }
+
+  @ApiOperation({ summary: 'Votar en la encuesta de una discusión' })
+  @ApiBearerAuth()
+  @ApiUnauthorizedResponse({ description: 'Missing or invalid bearer token' })
+  @ApiNotFoundResponse({ description: 'Discussion or poll not found' })
+  @ApiOkResponse({ description: 'Vote applied successfully' })
+  @UseGuards(JwtAuthGuard)
+  @HttpPost(':id/poll/vote')
+  votePoll(@Req() req: AuthRequest, @Param('id') id: string, @Body() body: { optionIndex: number }) {
+    return this.discussionsService.votePoll(req.user.userId, id, body.optionIndex);
+  }
+
+  @ApiOperation({ summary: 'Quitar voto de la encuesta de una discusión' })
+  @ApiBearerAuth()
+  @ApiUnauthorizedResponse({ description: 'Missing or invalid bearer token' })
+  @ApiNotFoundResponse({ description: 'Vote not found' })
+  @ApiOkResponse({ description: 'Vote removed successfully' })
+  @UseGuards(JwtAuthGuard)
+  @HttpCode(HttpStatus.OK)
+  @Delete(':id/poll/vote')
+  unvotePoll(@Req() req: AuthRequest, @Param('id') id: string) {
+    return this.discussionsService.unvotePoll(req.user.userId, id);
   }
 }

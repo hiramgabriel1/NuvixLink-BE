@@ -23,6 +23,25 @@ function transformIsDraft({ value }: { value: unknown }): boolean | undefined {
   return undefined;
 }
 
+function transformPoll({ value }: { value: unknown }): unknown {
+  if (value === undefined || value === null || value === '') return undefined;
+  let obj = value;
+  if (typeof value === 'string') {
+    try {
+      obj = JSON.parse(value);
+    } catch {
+      return undefined;
+    }
+  }
+  if (typeof obj !== 'object' || obj === null) return undefined;
+  const poll = obj as Record<string, unknown>;
+  const options = poll.options;
+  if (Array.isArray(options) && options.length > 0 && typeof options[0] === 'object' && options[0] !== null && 'text' in (options[0] as Record<string, unknown>)) {
+    poll.options = (options as { text: string }[]).map((o) => o.text);
+  }
+  return poll;
+}
+
 export class CreateDiscussionDto {
   @ApiProperty({ maxLength: 200, example: '¿Cómo estructuráis DTOs en NestJS?' })
   @IsString()
@@ -43,9 +62,14 @@ export class CreateDiscussionDto {
   @Transform(transformTags)
   tags?: string[];
 
+  @ApiPropertyOptional({ description: 'Encuesta opcional adjunta a la discusión' })
+  @IsOptional()
+  @Transform(transformPoll)
+  poll?: Record<string, unknown>;
+
   @ApiPropertyOptional({ default: false, description: 'Borrador: no entra al listado ni al socket' })
+  @Transform(transformIsDraft)
   @IsOptional()
   @IsBoolean()
-  @Transform(transformIsDraft)
   isDraft?: boolean;
 }

@@ -280,6 +280,7 @@ model Discussion {
   description String?
   tags        String[] @default([])
   isDraft     Boolean  @default(false)
+  poll        Json?
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 

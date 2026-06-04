@@ -52,6 +52,14 @@ export class DiscussionsService {
     if (dto.description !== undefined) {
       data.description = dto.description?.trim() || null;
     }
+    if (dto.poll) {
+      const p = dto.poll as { question: string; options: string[] };
+      data.poll = {
+        question: p.question?.trim?.() ?? '',
+        options: Array.isArray(p.options) ? p.options.map((o) => (typeof o === 'string' ? o.trim() : String(o))) : [],
+        votes: {},
+      } as Prisma.InputJsonValue;
+    }
     const row = await this.prisma.discussion.create({
       data,
       include: this.listInclude,
@@ -609,5 +617,86 @@ export class DiscussionsService {
     });
     const likesCount = await this.prisma.discussionLike.count({ where: { discussionId } });
     return { liked: false, likesCount };
+  }
+
+  async votePoll(userId: string, discussionId: string, optionIndex: number) {
+    const d = await this.prisma.discussion.findUnique({
+      where: { id: discussionId },
+      select: { id: true, isDraft: true, poll: true },
+    });
+    if (!d || d.isDraft) {
+      AppError.notFound(ErrorCode.DISCUSSION_NOT_FOUND, 'Discussion not found');
+    }
+    if (!d.poll) {
+      AppError.badRequest(ErrorCode.VALIDATION_FAILED, 'This discussion has no poll');
+    }
+
+    const poll = d.poll as { question: string; options: string[]; votes: Record<string, string[]> };
+    if (optionIndex < 0 || optionIndex >= poll.options.length) {
+      AppError.badRequest(ErrorCode.VALIDATION_FAILED, 'Invalid option index');
+    }
+
+    if (!poll.votes) poll.votes = {};
+
+    for (const [, voters] of Object.entries(poll.votes)) {
+      if ((voters as string[]).includes(userId)) {
+        AppError.conflict('DISCUSSION_POLL_ALREADY_VOTED', 'You already voted on this poll');
+      }
+    }
+
+    const optionKey = String(optionIndex);
+    if (!poll.votes[optionKey]) poll.votes[optionKey] = [];
+    poll.votes[optionKey].push(userId);
+
+    await this.prisma.discussion.update({
+      where: { id: discussionId },
+      data: { poll: poll as Prisma.InputJsonValue },
+    });
+
+    return this.buildPollResponse(poll);
+  }
+
+  async unvotePoll(userId: string, discussionId: string) {
+    const d = await this.prisma.discussion.findUnique({
+      where: { id: discussionId },
+      select: { id: true, poll: true },
+    });
+    if (!d) AppError.notFound(ErrorCode.DISCUSSION_NOT_FOUND, 'Discussion not found');
+    if (!d.poll) AppError.badRequest(ErrorCode.VALIDATION_FAILED, 'This discussion has no poll');
+
+    const poll = d.poll as { question: string; options: string[]; votes: Record<string, string[]> };
+    if (!poll.votes) poll.votes = {};
+
+    let removed = false;
+    for (const key of Object.keys(poll.votes)) {
+      const idx = poll.votes[key].indexOf(userId);
+      if (idx !== -1) {
+        poll.votes[key].splice(idx, 1);
+        removed = true;
+        break;
+      }
+    }
+    if (!removed) {
+      AppError.notFound('DISCUSSION_POLL_VOTE_NOT_FOUND', 'Vote not found');
+    }
+
+    await this.prisma.discussion.update({
+      where: { id: discussionId },
+      data: { poll: poll as Prisma.InputJsonValue },
+    });
+
+    return this.buildPollResponse(poll);
+  }
+
+  private buildPollResponse(poll: { question: string; options: string[]; votes: Record<string, string[]> }) {
+    const totalVotes = Object.values(poll.votes ?? {}).reduce((sum, voters) => sum + (voters as string[]).length, 0);
+    return {
+      question: poll.question,
+      options: poll.options.map((opt, idx) => ({
+        text: opt,
+        votes: (poll.votes?.[String(idx)] ?? []).length,
+      })),
+      totalVotes,
+    };
   }
 }
