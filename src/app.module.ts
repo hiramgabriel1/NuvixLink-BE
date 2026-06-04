@@ -16,6 +16,7 @@ import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { TurnstileModule } from './turnstile/turnstile.module';
 import { LibraryRecommendationsModule } from './library-recommendations/library-recommendations.module';
+import { SurveysModule } from './surveys/surveys.module';
 
 @Module({
   imports: [
@@ -37,6 +38,7 @@ import { LibraryRecommendationsModule } from './library-recommendations/library-
     SearchModule,
     TurnstileModule,
     LibraryRecommendationsModule,
+    SurveysModule,
   ],
   controllers: [AppController],
   providers: [

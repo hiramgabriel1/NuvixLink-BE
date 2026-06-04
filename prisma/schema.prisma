@@ -54,6 +54,9 @@ model User {
   libraryRecommendationVotes   LibraryRecommendationVote[]
   libraryRecommendationReports LibraryRecommendationReport[]
 
+  surveys    Survey[]
+  surveyVotes SurveyVote[]
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 }
@@ -462,4 +465,35 @@ model LibraryRecommendationReport {
   recommendation   LibraryRecommendation @relation(fields: [recommendationId], references: [id], onDelete: Cascade)
 
   @@unique([userId, recommendationId])
+}
+
+model Survey {
+  id             String   @id @default(cuid())
+  questionSurvey String
+  options        String[]
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  authorId       String
+  author         User     @relation(fields: [authorId], references: [id], onDelete: Cascade)
+
+  votes          SurveyVote[]
+
+  @@index([authorId])
+}
+
+model SurveyVote {
+  id        String   @id @default(cuid())
+  option    String
+  createdAt DateTime @default(now())
+
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  surveyId  String
+  survey    Survey   @relation(fields: [surveyId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, surveyId])
+  @@index([surveyId])
+  @@index([userId])
 }
